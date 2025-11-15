@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, Users } from "lucide-react";
+import { Calendar, MapPin, Users, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface Event {
@@ -10,7 +10,9 @@ interface Event {
   date: string;
   venue: string;
   guests: number;
-  status: "confirmed" | "pending" | "completed";
+  status: "confirme" | "en_attente" | "termine";
+  startTime: string;
+  endTime: string;
 }
 
 const mockEvents: Event[] = [
@@ -20,7 +22,9 @@ const mockEvents: Event[] = [
     date: "2025-01-20",
     venue: "Salle Royale",
     guests: 150,
-    status: "confirmed",
+    status: "confirme",
+    startTime: "18:00",
+    endTime: "02:00",
   },
   {
     id: "2",
@@ -28,7 +32,9 @@ const mockEvents: Event[] = [
     date: "2025-01-25",
     venue: "Centre Convention",
     guests: 300,
-    status: "pending",
+    status: "en_attente",
+    startTime: "09:00",
+    endTime: "17:00",
   },
   {
     id: "3",
@@ -36,20 +42,22 @@ const mockEvents: Event[] = [
     date: "2025-02-10",
     venue: "Grand Hôtel",
     guests: 200,
-    status: "confirmed",
+    status: "confirme",
+    startTime: "20:00",
+    endTime: "01:00",
   },
 ];
 
 const statusColors = {
-  confirmed: "bg-success hover:bg-success/90",
-  pending: "bg-accent hover:bg-accent/90",
-  completed: "bg-muted hover:bg-muted/90",
+  confirme: "bg-success hover:bg-success/90",
+  en_attente: "bg-accent hover:bg-accent/90",
+  termine: "bg-muted hover:bg-muted/90",
 };
 
 const statusLabels = {
-  confirmed: "Confirmé",
-  pending: "En attente",
-  completed: "Terminé",
+  confirme: "Confirmé",
+  en_attente: "En attente",
+  termine: "Terminé",
 };
 
 export const UpcomingEvents = () => {
@@ -61,15 +69,15 @@ export const UpcomingEvents = () => {
           Événements à venir
         </CardTitle>
         <Button variant="outline" size="sm" asChild>
-          <Link to="/events">Voir tout</Link>
+          <Link to="/admin/events">Voir tout</Link>
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {mockEvents.map((event) => (
             <div
               key={event.id}
-              className="p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow"
+              className="p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow h-full flex flex-col justify-between"
             >
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -86,14 +94,22 @@ export const UpcomingEvents = () => {
                   {statusLabels[event.status]}
                 </Badge>
               </div>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex flex-col gap-2 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
-                  <MapPin className="w-4 h-4" />
-                  <span>{event.venue}</span>
+                  <Clock className="w-4 h-4" />
+                  <span>
+                    {event.startTime} - {event.endTime}
+                  </span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Users className="w-4 h-4" />
-                  <span>{event.guests} invités</span>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    <span>{event.venue}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Users className="w-4 h-4" />
+                    <span>{event.guests} invités</span>
+                  </div>
                 </div>
               </div>
             </div>

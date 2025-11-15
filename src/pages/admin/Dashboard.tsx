@@ -1,6 +1,5 @@
 import { Calendar, Users, UserCheck, TrendingUp } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/KpiCard";
-import { AttendanceFeed } from "@/components/dashboard/AttendanceFeed";
 import { UpcomingEvents } from "@/components/dashboard/UpcomingEvents";
 
 const Dashboard = () => {
@@ -21,37 +20,38 @@ const Dashboard = () => {
           change="+2 ce mois"
           changeType="positive"
           icon={Calendar}
+          variant="blue"
         />
         <KpiCard
-          title="Invités totaux"
+          title="Salles totales"
           value="1,248"
-          change="+18%"
-          changeType="positive"
+          change="3 occupés"
+          changeType="neutral"
           icon={Users}
+          variant="green"
         />
         <KpiCard
-          title="Personnel actif"
+          title="Employés actifs"
           value={24}
           change="3 en service"
           changeType="neutral"
           icon={UserCheck}
+          variant="orange"
         />
         <KpiCard
           title="Revenu mensuel"
-          value="89,400€"
+          value="89,400 FCFA"
           change="+12.5%"
           changeType="positive"
           icon={TrendingUp}
+          variant="red"
         />
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-3">
           <UpcomingEvents />
-        </div>
-        <div>
-          <AttendanceFeed />
         </div>
       </div>
     </div>

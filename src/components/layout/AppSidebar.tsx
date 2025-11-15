@@ -9,25 +9,50 @@ import {
   DollarSign,
   Settings,
   Package,
+  Building2,
+  ClipboardList,
 } from "lucide-react";
+import { useUser } from "@/context/UserContext";
 
 interface SidebarProps {
   open: boolean;
 }
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Tableau de bord", path: "/" },
-  { icon: Calendar, label: "Événements", path: "/events" },
-  { icon: MapPin, label: "Salles", path: "/venues" },
-  { icon: Users, label: "Invités", path: "/guests" },
-  { icon: UserCheck, label: "Personnel", path: "/staff" },
-  { icon: Package, label: "Logistique", path: "/logistics" },
-  { icon: DollarSign, label: "Finance", path: "/finance" },
-  { icon: Settings, label: "Paramètres", path: "/settings" },
+const adminMenuItems = [
+  { icon: LayoutDashboard, label: "Tableau de bord", path: "/admin/dashboard" },
+  { icon: Calendar, label: "Événements", path: "/admin/events" },
+  { icon: MapPin, label: "Salles", path: "/admin/venues" },
+  { icon: Users, label: "Invités", path: "/admin/guests" },
+  { icon: UserCheck, label: "Personnel", path: "/admin/staff" },
+  { icon: Package, label: "Logistique", path: "/admin/logistics" },
+  { icon: DollarSign, label: "Finance", path: "/admin/finance" },
+  { icon: Settings, label: "Paramètres", path: "/admin/settings" },
+];
+
+const superAdminMenuItems = [
+  { icon: Building2, label: "Entreprises", path: "/super-admin/companies" },
+];
+
+const hostessMenuItems = [
+  { icon: Users, label: "Invités", path: "/hotesse/guests" },
+];
+
+const userMenuItems = [
+  { icon: ClipboardList, label: "Pointages", path: "/utilisateur/pointages" },
 ];
 
 export const AppSidebar = ({ open }: SidebarProps) => {
   const location = useLocation();
+  const { role } = useUser();
+
+  if (role === "hotesse" || role === "utilisateur") {
+    return null;
+  }
+
+  const menuItems =
+    role === "superadmin"
+      ? superAdminMenuItems
+      : adminMenuItems;
 
   return (
     <aside
