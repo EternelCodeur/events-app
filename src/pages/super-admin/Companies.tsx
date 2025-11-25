@@ -1,5 +1,6 @@
 import { useEffect, useState, FormEvent } from "react";
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -10,8 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getCompanies, createCompany, type Company } from "@/lib/api";
-import { updateCompanyStatus, deleteCompany } from "@/lib/api";
+import { getCompanies, createCompany, type Company, API_BASE } from "@/lib/api";
+import { updateCompanyStatus, deleteCompany, updateCompany } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
 
 const slugify = (s: string) =>
@@ -25,6 +26,7 @@ const slugify = (s: string) =>
 const Companies = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   // Création
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -75,6 +77,10 @@ const Companies = () => {
     }
   };
 
+  const handleView = (id: string) => {
+    navigate(`/super-admin/companies/${encodeURIComponent(id)}/events`);
+  };
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -90,6 +96,51 @@ const Companies = () => {
     })();
     return () => {
       mounted = false;
+    };
+  }, []);
+
+  // Sync temps réel multi-onglets via SSE
+  useEffect(() => {
+    const es = new EventSource(`${API_BASE}/api/companies/stream`);
+
+    const handleCreated = (ev: MessageEvent) => {
+      try {
+        const data = JSON.parse(ev.data) as Company;
+        setCompanies((prev) => (prev.some((c) => c.id === data.id) ? prev : [data, ...prev]));
+      } catch {
+        return;
+      }
+    };
+    const handleUpdated = (ev: MessageEvent) => {
+      try {
+        const data = JSON.parse(ev.data) as Company;
+        setCompanies((prev) => prev.map((c) => (c.id === data.id ? data : c)));
+      } catch {
+        return;
+      }
+    };
+    const handleDeleted = (ev: MessageEvent) => {
+      try {
+        const data = JSON.parse(ev.data) as { id: string };
+        setCompanies((prev) => prev.filter((c) => c.id !== data.id));
+      } catch {
+        return;
+      }
+    };
+
+    es.addEventListener("CompanyCreated", handleCreated as EventListener);
+    es.addEventListener("CompanyUpdated", handleUpdated as EventListener);
+    es.addEventListener("CompanyDeleted", handleDeleted as EventListener);
+
+    es.onerror = () => {
+      // Optionnel: silencieux pour éviter spam UI
+    };
+
+    return () => {
+      es.removeEventListener("CompanyCreated", handleCreated as EventListener);
+      es.removeEventListener("CompanyUpdated", handleUpdated as EventListener);
+      es.removeEventListener("CompanyDeleted", handleDeleted as EventListener);
+      es.close();
     };
   }, []);
 
@@ -131,23 +182,22 @@ const Companies = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdateCompany = (e: FormEvent<HTMLFormElement>) => {
+  const handleUpdateCompany = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingId) return;
-    setCompanies((prev) =>
-      prev.map((c) =>
-        c.id === editingId
-          ? {
-              ...c,
-              name: editName.trim() || c.name,
-              email: editEmail.trim(),
-              phone: editPhone.trim(),
-              adminName: editAdminName.trim(),
-            }
-          : c,
-      ),
-    );
-    setIsEditDialogOpen(false);
+    try {
+      const updated = await updateCompany(editingId, {
+        name: editName.trim(),
+        email: editEmail.trim() || null,
+        phone: editPhone.trim() || null,
+        adminName: editAdminName.trim() || null,
+      });
+      setCompanies((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
+      setIsEditDialogOpen(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Mise à jour impossible";
+      toast.error(message);
+    }
   };
 
   return (
@@ -352,6 +402,16 @@ const Companies = () => {
                 </p>
               </div>
               <div className="flex gap-2 mt-2 justify-end">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  type="button"
+                  onClick={() => handleView(company.id)}
+                  aria-label="Voir l'entreprise"
+                >
+                  <Eye className="w-4 h-4" />
+                </Button>
                 <Button
                   variant="outline"
                   size="icon"

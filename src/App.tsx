@@ -16,6 +16,7 @@ import Venues from "./pages/admin/Venues";
 import NotFound from "./pages/NotFound";
 import Companies from "./pages/super-admin/Companies";
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
+import CompanyEvents from "./pages/super-admin/CompanyEvents";
 import Checkins from "./pages/agent/Checkins";
 import GuestsAgent from "./pages/agent/GuestsAgent";
 import UserPointages from "./pages/user/UserPointages";
@@ -178,6 +179,16 @@ const App = () => (
                 <ProtectedRoute allowedRoles={["superadmin"]}>
                   <AppLayout>
                     <Companies />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/super-admin/companies/:id/events"
+              element={
+                <ProtectedRoute allowedRoles={["superadmin"]}>
+                  <AppLayout>
+                    <CompanyEvents />
                   </AppLayout>
                 </ProtectedRoute>
               }

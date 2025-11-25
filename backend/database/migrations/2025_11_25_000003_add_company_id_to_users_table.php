@@ -8,8 +8,8 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'role')) {
-                $table->enum('role', ['admin', 'superadmin', 'user', 'hotesse'])->default('user')->after('password');
+            if (!Schema::hasColumn('users', 'company_id')) {
+                $table->foreignId('company_id')->nullable()->constrained('companies')->cascadeOnDelete();
             }
         });
     }
@@ -17,8 +17,8 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'role')) {
-                $table->dropColumn('role');
+            if (Schema::hasColumn('users', 'company_id')) {
+                $table->dropConstrainedForeignId('company_id');
             }
         });
     }

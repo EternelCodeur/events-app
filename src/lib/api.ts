@@ -14,10 +14,18 @@ export type CompanyPayload = {
   adminName?: string;
 };
 
+export type CompanyUpdatePayload = {
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
+  adminName?: string | null;
+  status?: "active" | "inactive";
+};
+
 // Allow base URL to be provided via Vite define in vite.config.ts (e.g., define: { __API_BASE__: JSON.stringify('http://localhost:8000') })
 declare const __API_BASE__: string;
 
-const API_BASE: string =
+export const API_BASE: string =
   ((typeof __API_BASE__ !== "undefined" && __API_BASE__) as string) ||
   (import.meta.env.VITE_API_BASE_URL as string) ||
   "http://localhost:8000";
@@ -41,6 +49,33 @@ export async function createCompany(payload: CompanyPayload): Promise<Company> {
   });
   if (!res.ok) {
     let msg = "Failed to create company";
+    const text = await res.text();
+    let data: { message?: string } | null = null;
+    try {
+      data = text ? (JSON.parse(text) as { message?: string }) : null;
+    } catch (_e) {
+      data = null;
+    }
+    if (data && data.message) msg = data.message;
+    throw new Error(msg);
+  }
+  return (await res.json()) as Company;
+}
+
+export async function updateCompany(
+  id: string,
+  payload: CompanyUpdatePayload,
+): Promise<Company> {
+  const res = await fetch(`${API_BASE}/api/companies/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let msg = "Failed to update company";
     const text = await res.text();
     let data: { message?: string } | null = null;
     try {
