@@ -33,6 +33,7 @@ export const API_BASE: string =
 export async function getCompanies(): Promise<Company[]> {
   const res = await fetch(`${API_BASE}/api/companies`, {
     headers: { Accept: "application/json" },
+    credentials: "include",
   });
   if (!res.ok) throw new Error("Failed to fetch companies");
   return (await res.json()) as Company[];
@@ -46,6 +47,7 @@ export async function createCompany(payload: CompanyPayload): Promise<Company> {
       Accept: "application/json",
     },
     body: JSON.stringify(payload),
+    credentials: "include",
   });
   if (!res.ok) {
     let msg = "Failed to create company";
@@ -73,6 +75,7 @@ export async function updateCompany(
       Accept: "application/json",
     },
     body: JSON.stringify(payload),
+    credentials: "include",
   });
   if (!res.ok) {
     let msg = "Failed to update company";
@@ -93,6 +96,7 @@ export async function deleteCompany(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/companies/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: { Accept: "application/json" },
+    credentials: "include",
   });
   if (!res.ok) {
     let msg = "Failed to delete company";
@@ -119,6 +123,7 @@ export async function updateCompanyStatus(
       Accept: "application/json",
     },
     body: JSON.stringify({ status }),
+    credentials: "include",
   });
   if (!res.ok) {
     let msg = "Failed to update company";

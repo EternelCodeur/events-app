@@ -8,12 +8,12 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ allowedRoles, children }: ProtectedRouteProps) => {
-  const { role } = useUser();
+  const { role, user, loading } = useUser();
   const location = useLocation();
 
-  if (!allowedRoles.includes(role)) {
-    return <Navigate to="/" state={{ from: location }} replace />;
-  }
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (!allowedRoles.includes(role)) return <Navigate to="/" state={{ from: location }} replace />;
 
   return <>{children}</>;
 };

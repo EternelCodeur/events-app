@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,8 @@ const Companies = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Création
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -42,6 +44,16 @@ const Companies = () => {
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editAdminName, setEditAdminName] = useState("");
+
+  const filteredCompanies = useMemo(() => {
+    const q = slugify(query.trim());
+    return companies.filter((c) => {
+      if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+      if (!q) return true;
+      const fields = [c.name, c.email || "", c.adminName || "", c.phone || ""];
+      return fields.some((f) => slugify(f).includes(q));
+    });
+  }, [companies, query, statusFilter]);
 
   const handleAddCompany = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -101,7 +113,7 @@ const Companies = () => {
 
   // Sync temps réel multi-onglets via SSE
   useEffect(() => {
-    const es = new EventSource(`${API_BASE}/api/companies/stream`);
+    const es = new EventSource(`${API_BASE}/api/companies/stream`, { withCredentials: true } as EventSourceInit);
 
     const handleCreated = (ev: MessageEvent) => {
       try {
@@ -209,6 +221,33 @@ const Companies = () => {
             Gestion des entreprises clientes de la plateforme
           </p>
         </div>
+
+      <div className="flex flex-col md:flex-row gap-3">
+        <div className="w-full md:flex-1">
+          <label htmlFor="company-search" className="sr-only">Rechercher</label>
+          <input
+            id="company-search"
+            type="text"
+            className="w-full h-9 px-3 py-1 border rounded-md bg-background text-sm"
+            placeholder="Rechercher une entreprise..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="status-filter" className="sr-only">Filtrer par statut</label>
+          <select
+            id="status-filter"
+            className="h-9 px-3 py-1 border rounded-md bg-background text-sm w-full md:w-auto"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+          >
+            <option value="all">Toutes</option>
+            <option value="active">Actives</option>
+            <option value="inactive">Inactives</option>
+          </select>
+        </div>
+      </div>
         <Button
           className="bg-primary hover:bg-primary-hover"
           type="button"
@@ -373,11 +412,11 @@ const Companies = () => {
         </DialogContent>
       </Dialog>
 
-      {companies.length === 0 && !loading && (
-        <p className="text-sm text-muted-foreground">Aucune entreprise pour le moment.</p>
+      {filteredCompanies.length === 0 && !loading && (
+        <p className="text-sm text-muted-foreground">Aucune entreprise trouvée.</p>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {companies.map((company) => (
+        {filteredCompanies.map((company) => (
           <Card key={company.id} className="hover:shadow-lg transition-shadow">
             <CardContent className="p-6 space-y-3">
               <div className="flex items-center justify-between">
