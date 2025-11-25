@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { Plus, Pencil, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,39 +10,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { getCompanies, createCompany, type Company } from "@/lib/api";
+import { updateCompanyStatus, deleteCompany } from "@/lib/api";
+import { toast } from "@/components/ui/sonner";
 
-const mockCompanies = [
-  {
-    id: "1",
-    name: "Entreprise Alpha",
-    email: "contact@alpha.com",
-    phone: "+33 1 23 45 67 89",
-    adminName: "Alice Martin",
-    events: 12,
-    status: "active" as "active" | "inactive",
-  },
-  {
-    id: "2",
-    name: "Entreprise Beta",
-    email: "contact@beta.com",
-    phone: "+33 1 98 76 54 32",
-    adminName: "Bruno Dupont",
-    events: 5,
-    status: "active" as "active" | "inactive",
-  },
-  {
-    id: "3",
-    name: "Entreprise Gamma",
-    email: "contact@gamma.com",
-    phone: "+33 6 12 34 56 78",
-    adminName: "Claire Durand",
-    events: 0,
-    status: "inactive" as "active" | "inactive",
-  },
-];
+const slugify = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 const Companies = () => {
-  const [companies, setCompanies] = useState(mockCompanies);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Création
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -59,36 +41,83 @@ const Companies = () => {
   const [editPhone, setEditPhone] = useState("");
   const [editAdminName, setEditAdminName] = useState("");
 
-  const handleAddCompany = (e: FormEvent<HTMLFormElement>) => {
+  const handleAddCompany = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    const newCompany = {
-      id: Date.now().toString(),
-      name: newName.trim(),
-      email: newEmail.trim(),
-      phone: newPhone.trim(),
-      adminName: newAdminName.trim(),
-      events: 0,
-      status: "active" as "active" | "inactive",
+    const nameSlug = slugify(newName.trim());
+    const emailLower = newEmail.trim() ? newEmail.trim().toLowerCase() : undefined;
+
+    // Frontend duplicate checks against current list
+    if (companies.some((c) => slugify(c.name) === nameSlug)) {
+      toast.error("Une entreprise avec ce nom existe déjà.");
+      return;
+    }
+    if (emailLower && companies.some((c) => (c.email || "").toLowerCase() === emailLower)) {
+      toast.error("Une entreprise avec cet email existe déjà.");
+      return;
+    }
+    try {
+      const created = await createCompany({
+        name: newName.trim(),
+        email: newEmail.trim() || undefined,
+        phone: newPhone.trim() || undefined,
+        adminName: newAdminName.trim() || undefined,
+      });
+      setCompanies((prev) => [created, ...prev]);
+      setIsCreateDialogOpen(false);
+      setNewName("");
+      setNewEmail("");
+      setNewPhone("");
+      setNewAdminName("");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Impossible d'enregistrer l'entreprise.";
+      toast.error(message);
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const list = await getCompanies();
+        if (mounted && Array.isArray(list)) setCompanies(list);
+      } catch {
+        toast.error("Impossible de charger les entreprises.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
     };
-    setCompanies((prev) => [newCompany, ...prev]);
-    setNewName("");
-    setNewEmail("");
-    setNewPhone("");
-    setNewAdminName("");
-    setIsCreateDialogOpen(false);
+  }, []);
+
+  const handleToggleStatus = async (id: string) => {
+    const current = companies.find((c) => c.id === id);
+    if (!current) return;
+    const next: "active" | "inactive" = current.status === "active" ? "inactive" : "active";
+    try {
+      const updated = await updateCompanyStatus(id, next);
+      setCompanies((prev) => prev.map((c) => (c.id === id ? updated : c)));
+      toast.success(next === "active" ? "Entreprise activée" : "Entreprise désactivée");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Mise à jour impossible";
+      toast.error(message);
+    }
   };
 
-  const handleToggleStatus = (id: string) => {
-    setCompanies((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, status: c.status === "active" ? "inactive" : "active" } : c,
-      ),
-    );
-  };
-
-  const handleDelete = (id: string) => {
-    setCompanies((prev) => prev.filter((c) => c.id !== id));
+  const handleDelete = async (id: string) => {
+    const ok = window.confirm("Supprimer définitivement cette entreprise ?");
+    if (!ok) return;
+    try {
+      await deleteCompany(id);
+      setCompanies((prev) => prev.filter((c) => c.id !== id));
+      toast.success("Entreprise supprimée");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Suppression impossible";
+      toast.error(message);
+    }
   };
 
   const handleEdit = (id: string) => {
@@ -294,6 +323,9 @@ const Companies = () => {
         </DialogContent>
       </Dialog>
 
+      {companies.length === 0 && !loading && (
+        <p className="text-sm text-muted-foreground">Aucune entreprise pour le moment.</p>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {companies.map((company) => (
           <Card key={company.id} className="hover:shadow-lg transition-shadow">
@@ -318,7 +350,6 @@ const Companies = () => {
                 <p>
                   Administrateur : {company.adminName || "Non défini"}
                 </p>
-                <p>{company.events} événement(s) total</p>
               </div>
               <div className="flex gap-2 mt-2 justify-end">
                 <Button

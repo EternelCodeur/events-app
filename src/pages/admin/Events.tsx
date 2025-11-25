@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Filter, Pencil, Trash2, CheckCircle2, XCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 
 type EventStatus = "confirme" | "en_attente" | "termine" | "annule";
+type VenueArea = "interieur" | "exterieur" | "les_deux";
+type EventType = "mariage" | "celebration_religieuse" | "cocktail";
 
 interface EventItem {
   id: string;
@@ -26,12 +28,16 @@ interface EventItem {
   status: EventStatus;
   budget: string;
   capacity?: number;
+  eventType?: EventType;
+  areaChoice?: VenueArea;
+  mariageInteriorSubtype?: "civil" | "coutumier";
+  mariageExteriorSubtype?: "civil" | "coutumier";
 }
 
-const venues = [
-  { id: "salle-royale", name: "Salle Royale" },
-  { id: "centre-convention", name: "Centre Convention" },
-  { id: "grand-hotel", name: "Grand Hôtel" },
+const venues: { id: string; name: string; area: VenueArea }[] = [
+  { id: "salle-royale", name: "Salle Royale", area: "les_deux" },
+  { id: "centre-convention", name: "Centre Convention", area: "interieur" },
+  { id: "grand-hotel", name: "Grand Hôtel", area: "les_deux" },
 ];
 
 const initialEvents: EventItem[] = [
@@ -44,7 +50,7 @@ const initialEvents: EventItem[] = [
     venue: "salle-royale",
     guests: 150,
     status: "confirme",
-    budget: "15,000€",
+    budget: "15,000FCFA",
   },
   {
     id: "2",
@@ -55,7 +61,7 @@ const initialEvents: EventItem[] = [
     venue: "centre-convention",
     guests: 300,
     status: "en_attente",
-    budget: "30,000€",
+    budget: "30,000FCFA",
   },
   {
     id: "3",
@@ -66,7 +72,7 @@ const initialEvents: EventItem[] = [
     venue: "grand-hotel",
     guests: 200,
     status: "confirme",
-    budget: "25,000€",
+    budget: "25,000FCFA",
   },
 ];
 
@@ -86,7 +92,14 @@ const statusLabels = {
 };
 
 const Events = () => {
-  const [events, setEvents] = useState<EventItem[]>(initialEvents);
+  const [events, setEvents] = useState<EventItem[]>(() => {
+    try {
+      const raw = localStorage.getItem("events");
+      return raw ? (JSON.parse(raw) as EventItem[]) : initialEvents;
+    } catch (_) {
+      return initialEvents;
+    }
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "confirme" | "en_attente" | "termine" | "annule">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -95,35 +108,94 @@ const Events = () => {
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
   const navigate = useNavigate();
 
-  const [formTitle, setFormTitle] = useState("");
+  useEffect(() => {
+    try {
+      localStorage.setItem("events", JSON.stringify(events));
+    } catch (_) {
+      // ignore persistence errors
+    }
+  }, [events]);
+
   const [formDate, setFormDate] = useState("");
   const [formStartTime, setFormStartTime] = useState("");
   const [formEndTime, setFormEndTime] = useState("");
   const [formCapacity, setFormCapacity] = useState("");
   const [formBudget, setFormBudget] = useState("");
   const [formVenue, setFormVenue] = useState("");
+  const [formEventType, setFormEventType] = useState<EventType | "">("");
+  const [formAreaChoice, setFormAreaChoice] = useState<VenueArea | "">("");
+  const [formMariageInterior, setFormMariageInterior] = useState<"civil" | "coutumier" | "">("");
+  const [formMariageExterior, setFormMariageExterior] = useState<"civil" | "coutumier" | "">("");
+
+  const selectedVenue = useMemo(() => venues.find((v) => v.id === formVenue), [formVenue]);
+  const selectedVenueArea = selectedVenue?.area;
+  const allowedAreas = useMemo(() => {
+    if (!selectedVenueArea) return [] as VenueArea[];
+    if (selectedVenueArea === "les_deux") return ["interieur", "exterieur", "les_deux"] as VenueArea[];
+    return [selectedVenueArea];
+  }, [selectedVenueArea]);
+
+  useEffect(() => {
+    if (allowedAreas.length === 1) {
+      if (formAreaChoice !== allowedAreas[0]) setFormAreaChoice(allowedAreas[0]);
+    } else if (allowedAreas.length && formAreaChoice && !allowedAreas.includes(formAreaChoice as VenueArea)) {
+      setFormAreaChoice("");
+    }
+  }, [allowedAreas, formAreaChoice]);
+
+  useEffect(() => {
+    if (formEventType !== "mariage") {
+      setFormMariageInterior("");
+      setFormMariageExterior("");
+      return;
+    }
+    if (formAreaChoice === "interieur") {
+      setFormMariageInterior((prev) => prev || "civil");
+      setFormMariageExterior("");
+    } else if (formAreaChoice === "exterieur") {
+      setFormMariageExterior((prev) => prev || "coutumier");
+      setFormMariageInterior("");
+    } else if (formAreaChoice === "les_deux") {
+      setFormMariageInterior((prev) => prev || "civil");
+      setFormMariageExterior((prev) => prev || "coutumier");
+    } else {
+      setFormMariageInterior("");
+      setFormMariageExterior("");
+    }
+  }, [formEventType, formAreaChoice]);
+
+  const mapAreaLabel = (a?: VenueArea) =>
+    a === "interieur" ? "Intérieur" : a === "exterieur" ? "Extérieur" : a === "les_deux" ? "Les deux" : "";
+  const mapEventTypeLabel = (t?: EventType) =>
+    t === "mariage" ? "Mariage" : t === "celebration_religieuse" ? "Célébration religieuse" : t === "cocktail" ? "Cocktail" : "";
 
   const openCreateDialog = () => {
     setEditingEvent(null);
-    setFormTitle("");
     setFormDate("");
     setFormStartTime("");
     setFormEndTime("");
     setFormCapacity("");
     setFormBudget("");
     setFormVenue("");
+    setFormEventType("");
+    setFormAreaChoice("");
+    setFormMariageInterior("");
+    setFormMariageExterior("");
     setDialogOpen(true);
   };
 
   const openEditDialog = (event: EventItem) => {
     setEditingEvent(event);
-    setFormTitle(event.title);
     setFormDate(event.date);
     setFormStartTime(event.startTime ?? "");
     setFormEndTime(event.endTime ?? "");
     setFormCapacity(event.capacity?.toString() ?? "");
     setFormBudget(event.budget);
     setFormVenue(event.venue);
+    setFormEventType(event.eventType ?? "");
+    setFormAreaChoice(event.areaChoice ?? "");
+    setFormMariageInterior(event.mariageInteriorSubtype ?? "");
+    setFormMariageExterior(event.mariageExteriorSubtype ?? "");
     setDialogOpen(true);
   };
 
@@ -145,13 +217,26 @@ const Events = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formTitle || !formDate) {
+    if (!formDate) {
       return;
     }
+    if (!formEventType) {
+      return;
+    }
+    if ((formEventType === "mariage" || formEventType === "cocktail" || formEventType === "celebration_religieuse") && formVenue && !formAreaChoice) {
+      return;
+    }
+    if (formEventType === "mariage" && formVenue) {
+      if ((formAreaChoice === "interieur" || formAreaChoice === "les_deux") && !formMariageInterior) return;
+      if ((formAreaChoice === "exterieur" || formAreaChoice === "les_deux") && !formMariageExterior) return;
+    }
+
+    const selectedVenueName = venues.find((v) => v.id === formVenue)?.name;
+    const generatedTitle = `${mapEventTypeLabel(formEventType)}`;
 
     const payload: EventItem = {
       id: editingEvent ? editingEvent.id : Date.now().toString(),
-      title: formTitle,
+      title: editingEvent ? editingEvent.title : generatedTitle || "Événement",
       date: formDate,
       startTime: formStartTime || undefined,
       endTime: formEndTime || undefined,
@@ -160,6 +245,19 @@ const Events = () => {
       capacity: formCapacity ? Number(formCapacity) : undefined,
       status: editingEvent?.status ?? "en_attente",
       budget: formBudget,
+      eventType: formEventType || undefined,
+      areaChoice:
+        formEventType && (formEventType === "mariage" || formEventType === "cocktail" || formEventType === "celebration_religieuse")
+          ? ((formAreaChoice as VenueArea) || undefined)
+          : undefined,
+      mariageInteriorSubtype:
+        formEventType === "mariage" && (formAreaChoice === "interieur" || formAreaChoice === "les_deux")
+          ? (formMariageInterior as "civil" | "coutumier")
+          : undefined,
+      mariageExteriorSubtype:
+        formEventType === "mariage" && (formAreaChoice === "exterieur" || formAreaChoice === "les_deux")
+          ? (formMariageExterior as "civil" | "coutumier")
+          : undefined,
     };
 
     setEvents((prev) => {
@@ -180,7 +278,7 @@ const Events = () => {
       const term = searchTerm.trim().toLowerCase();
       if (!term) return matchesStatus;
 
-      const haystack = `${event.title} ${event.venue}`.toLowerCase();
+      const haystack = `${event.title}`;
       return matchesStatus && haystack.includes(term);
     });
   }, [events, searchTerm, statusFilter]);
@@ -274,6 +372,38 @@ const Events = () => {
                   <span className="text-muted-foreground">Lieu</span>
                   <span className="font-medium text-foreground">{event.venue}</span>
                 </div>
+                {event.eventType && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Type</span>
+                    <span className="font-medium text-foreground">{mapEventTypeLabel(event.eventType)}</span>
+                  </div>
+                )}
+                {event.areaChoice && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Zone</span>
+                    <span className="font-medium text-foreground">{mapAreaLabel(event.areaChoice)}</span>
+                  </div>
+                )}
+                {event.eventType === "mariage" && (event.mariageInteriorSubtype || event.mariageExteriorSubtype) && (
+                  <div className="flex flex-col gap-1">
+                    {event.mariageInteriorSubtype && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Intérieur</span>
+                        <span className="font-medium text-foreground">
+                          {event.mariageInteriorSubtype === "civil" ? "Mariage civil" : "Mariage coutumier"}
+                        </span>
+                      </div>
+                    )}
+                    {event.mariageExteriorSubtype && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Extérieur</span>
+                        <span className="font-medium text-foreground">
+                          {event.mariageExteriorSubtype === "coutumier" ? "Mariage coutumier" : "Mariage civil"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Invités</span>
                   <span className="font-medium text-foreground">{event.guests}</span>
@@ -343,6 +473,28 @@ const Events = () => {
                   <span className="font-semibold">Lieu : </span>
                   <span>{selectedEvent.venue}</span>
                 </div>
+                {selectedEvent.eventType && (
+                  <div>
+                    <span className="font-semibold">Type : </span>
+                    <span>{mapEventTypeLabel(selectedEvent.eventType)}</span>
+                  </div>
+                )}
+                {selectedEvent.areaChoice && (
+                  <div>
+                    <span className="font-semibold">Zone : </span>
+                    <span>{mapAreaLabel(selectedEvent.areaChoice)}</span>
+                  </div>
+                )}
+                {selectedEvent.eventType === "mariage" && (selectedEvent.mariageInteriorSubtype || selectedEvent.mariageExteriorSubtype) && (
+                  <div>
+                    <span className="font-semibold">Sous-type : </span>
+                    <span>
+                      {selectedEvent.mariageInteriorSubtype && `Intérieur: ${selectedEvent.mariageInteriorSubtype === "civil" ? "civil" : "coutumier"}`}
+                      {selectedEvent.mariageInteriorSubtype && selectedEvent.mariageExteriorSubtype ? " | " : ""}
+                      {selectedEvent.mariageExteriorSubtype && `Extérieur: ${selectedEvent.mariageExteriorSubtype === "civil" ? "civil" : "coutumier"}`}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="font-semibold">Invités : </span>
                   <span>{selectedEvent.guests}</span>
@@ -445,15 +597,6 @@ const Events = () => {
             </DialogHeader>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Nom de l'événement</label>
-                <Input
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  placeholder="Nom de l'événement"
-                  required
-                />
-              </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Date</label>
                 <Input
@@ -462,6 +605,21 @@ const Events = () => {
                   onChange={(e) => setFormDate(e.target.value)}
                   required
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Type d'événement</label>
+                <select
+                  aria-label="Sélectionner le type d'événement"
+                  className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
+                  value={formEventType}
+                  onChange={(e) => setFormEventType(e.target.value as EventType)}
+                  required
+                >
+                  <option value="">Choisir...</option>
+                  <option value="mariage">Mariage</option>
+                  <option value="celebration_religieuse">Célébration religieuse</option>
+                  <option value="cocktail">Cocktail</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Nombre de places</label>
@@ -506,7 +664,12 @@ const Events = () => {
                   aria-label="Sélectionner une salle"
                   className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
                   value={formVenue}
-                  onChange={(e) => setFormVenue(e.target.value)}
+                  onChange={(e) => {
+                    setFormVenue(e.target.value);
+                    setFormAreaChoice("");
+                    setFormMariageInterior("");
+                    setFormMariageExterior("");
+                  }}
                 >
                   <option value="">Choisir une salle...</option>
                   {venues.map((venue) => (
@@ -516,6 +679,61 @@ const Events = () => {
                   ))}
                 </select>
               </div>
+              {formEventType && (formEventType === "mariage" || formEventType === "cocktail" || formEventType === "celebration_religieuse") && formVenue && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Zone</label>
+                  <select
+                    aria-label="Sélectionner la zone"
+                    className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
+                    value={formAreaChoice}
+                    onChange={(e) => setFormAreaChoice(e.target.value as VenueArea)}
+                    required
+                  >
+                    <option value="">Choisir...</option>
+                    {allowedAreas.map((a) => (
+                      <option key={a} value={a}>
+                        {a === "interieur" ? "Intérieur" : a === "exterieur" ? "Extérieur" : "Les deux"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {formEventType === "mariage" && formVenue && formAreaChoice && (
+                <>
+                  {(formAreaChoice === "interieur" || formAreaChoice === "les_deux") && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Type de mariage (intérieur)</label>
+                      <select
+                        aria-label="Sélectionner le type de mariage intérieur"
+                        className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
+                        value={formMariageInterior}
+                        onChange={(e) => setFormMariageInterior(e.target.value as "civil" | "coutumier")}
+                        required
+                      >
+                        <option value="">Choisir...</option>
+                        <option value="civil">Mariage civil</option>
+                        <option value="coutumier">Mariage coutumier</option>
+                      </select>
+                    </div>
+                  )}
+                  {(formAreaChoice === "exterieur" || formAreaChoice === "les_deux") && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Type de mariage (extérieur)</label>
+                      <select
+                        aria-label="Sélectionner le type de mariage extérieur"
+                        className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
+                        value={formMariageExterior}
+                        onChange={(e) => setFormMariageExterior(e.target.value as "civil" | "coutumier")}
+                        required
+                      >
+                        <option value="">Choisir...</option>
+                        <option value="civil">Mariage civil</option>
+                        <option value="coutumier">Mariage coutumier</option>
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             <DialogFooter className="flex justify-end gap-2">

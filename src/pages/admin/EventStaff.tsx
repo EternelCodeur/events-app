@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { useNavigate, useParams } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Search } from "lucide-react";
 
 const mockEvents = [
@@ -39,43 +40,146 @@ const initialStaff: StaffMember[] = [
   { id: "s7", name: "Giselle Kone", role: "Autres" },
 ];
 
+const incompatibleMap: Record<string, string[]> = {
+  decoration: ["peinture", "nettoyage_cour", "nettoyage_salle"],
+  peinture: ["decoration", "nettoyage_cour", "nettoyage_salle"],
+  nettoyage_cour: ["decoration", "peinture", "nettoyage_salle"],
+  nettoyage_salle: ["decoration", "peinture", "nettoyage_cour"],
+};
+
 const EventStaff = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const event = mockEvents.find((e) => e.id === id);
 
   const [availableStaff, setAvailableStaff] = useState<StaffMember[]>(initialStaff);
   const [assignedStaff, setAssignedStaff] = useState<StaffMember[]>([]);
+  const [taskAssignedStaff, setTaskAssignedStaff] = useState<StaffMember[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<StaffRole | "tous">("tous");
 
+  const task = useMemo(() => new URLSearchParams(location.search).get("task") || "", [location.search]);
+  const taskLabel = useMemo(() => {
+    switch (task) {
+      case "decoration":
+        return "Décoration";
+      case "peinture":
+        return "Peinture";
+      case "nettoyage_cour":
+        return "Nettoyage de la cour";
+      case "nettoyage_salle":
+        return "Nettoyage de la salle";
+      case "mise_en_place":
+        return "Mise en place";
+      case "demontage":
+        return "Démontage";
+      case "nettoyage":
+        return "Nettoyage";
+      default:
+        return "";
+    }
+  }, [task]);
+
+  const readTaskAssigned = (evId: string, t: string): StaffMember[] => {
+    try {
+      const raw = localStorage.getItem(`eventTaskAssigned:${evId}:${t}`);
+      return raw ? (JSON.parse(raw) as StaffMember[]) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    if (!id) return;
+    const key = `eventStaffAssigned:${id}`;
+    try {
+      const raw = localStorage.getItem(key);
+      const saved: StaffMember[] = raw ? JSON.parse(raw) : [];
+      setAssignedStaff(saved);
+      const savedIds = new Set(saved.map((s) => s.id));
+      setAvailableStaff(initialStaff.filter((m) => !savedIds.has(m.id)));
+    } catch (_) {
+      setAssignedStaff([]);
+      setAvailableStaff(initialStaff);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || !task) {
+      setTaskAssignedStaff([]);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(`eventTaskAssigned:${id}:${task}`);
+      const saved: StaffMember[] = raw ? JSON.parse(raw) : [];
+      setTaskAssignedStaff(saved);
+    } catch (_) {
+      setTaskAssignedStaff([]);
+    }
+  }, [id, task]);
+
+  const blockedIds = useMemo(() => {
+    if (!id || !task) return new Set<string>();
+    const incompatible = incompatibleMap[task] || [];
+    const ids = new Set<string>();
+    incompatible.forEach((t) => {
+      const arr = readTaskAssigned(id, t);
+      arr.forEach((m) => ids.add(m.id));
+    });
+    return ids;
+  }, [id, task]);
+
   const filteredStaff = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return availableStaff.filter((member) => {
+    const source: StaffMember[] = task
+      ? assignedStaff.filter((m) => !taskAssignedStaff.some((t) => t.id === m.id))
+      : availableStaff;
+    return source.filter((member) => {
+      if (blockedIds.has(member.id)) return false;
       const matchesRole = roleFilter === "tous" ? true : member.role === roleFilter;
       if (!term) return matchesRole;
-      return (
-        matchesRole &&
-        member.name.toLowerCase().includes(term)
-      );
+      return matchesRole && member.name.toLowerCase().includes(term);
     });
-  }, [availableStaff, searchTerm, roleFilter]);
+  }, [task, availableStaff, assignedStaff, taskAssignedStaff, searchTerm, roleFilter, blockedIds]);
 
   const handleAssign = (member: StaffMember) => {
-    setAssignedStaff((prev) => [...prev, member]);
-    setAvailableStaff((prev) => prev.filter((m) => m.id !== member.id));
+    if (task) {
+      if (blockedIds.has(member.id)) return;
+      setTaskAssignedStaff((prev) => {
+        const next = [...prev, member];
+        if (id) {
+          localStorage.setItem(`eventTaskAssigned:${id}:${task}`, JSON.stringify(next));
+        }
+        return next;
+      });
+    } else {
+      setAssignedStaff((prev) => {
+        const next = [...prev, member];
+        if (id) {
+          localStorage.setItem(`eventStaffAssigned:${id}`, JSON.stringify(next));
+        }
+        return next;
+      });
+      setAvailableStaff((prev) => prev.filter((m) => m.id !== member.id));
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            {event ? event.title : "Événement inconnu"}
-          </h1>
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="text-3xl font-bold text-foreground">
+              {event ? event.title : "Événement inconnu"}
+            </h1>
+            {taskLabel && (
+              <Badge className="bg-primary text-white">Tâche: {taskLabel}</Badge>
+            )}
+          </div>
           <p className="text-muted-foreground">
-            Assignez vos employés à cet événement.
+            {taskLabel ? `Assignez vos employés pour ${taskLabel}.` : "Assignez vos employés à cet événement."}
           </p>
         </div>
         <Button
@@ -153,7 +257,7 @@ const EventStaff = () => {
                       className="w-full bg-primary hover:bg-primary-hover text-white"
                       onClick={() => handleAssign(member)}
                     >
-                      Assigner à l'événement
+                      {taskLabel ? "Assigner à la tâche" : "Assigner à l'événement"}
                     </Button>
                   </CardContent>
                 </Card>
@@ -163,23 +267,57 @@ const EventStaff = () => {
         </CardContent>
       </Card>
 
-      {assignedStaff.length > 0 && (
+      {taskLabel && assignedStaff.length === 0 && (
         <Card>
-          <CardHeader>
-            <h2 className="text-xl font-semibold text-foreground">
-              Employés déjà assignés
-            </h2>
-          </CardHeader>
-          <CardContent>
-            <ul className="text-sm space-y-1 text-muted-foreground">
-              {assignedStaff.map((member) => (
-                <li key={member.id}>
-                  {member.name} - {member.role}
-                </li>
-              ))}
-            </ul>
+          <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              Aucun personnel n'est encore assigné à l'événement. Assignez d'abord des personnes pour pouvoir les affecter à cette tâche.
+            </div>
+            <Button
+              type="button"
+              className="bg-primary hover:bg-primary-hover text-white"
+              onClick={() => navigate(`/admin/events/${id}/staff`)}
+            >
+              Assigner du personnel à l'événement
+            </Button>
           </CardContent>
         </Card>
+      )}
+
+      {taskLabel ? (
+        taskAssignedStaff.length > 0 && (
+          <Card>
+            <CardHeader>
+              <h2 className="text-xl font-semibold text-foreground">Employés assignés à la tâche {taskLabel}</h2>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                {taskAssignedStaff.map((member) => (
+                  <li key={member.id}>
+                    {member.name} - {member.role}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )
+      ) : (
+        assignedStaff.length > 0 && (
+          <Card>
+            <CardHeader>
+              <h2 className="text-xl font-semibold text-foreground">Employés déjà assignés à l'événement</h2>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                {assignedStaff.map((member) => (
+                  <li key={member.id}>
+                    {member.name} - {member.role}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )
       )}
     </div>
   );

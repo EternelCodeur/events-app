@@ -108,7 +108,14 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
         {/* Topbar */}
         <header className="h-16 border-b border-border bg-card sticky top-0 z-20 px-6 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold text-foreground">{headerTitle}</h1>
+            {role === "superadmin" ? (
+              <div className="flex items-center gap-2">
+                <img src="/ng-events.png" alt="Logo" className="h-17 w-36" />
+                <h1 className="text-xl font-semibold text-foreground">{headerTitle}</h1>
+              </div>
+            ) : (
+              <h1 className="text-xl font-semibold text-foreground">{headerTitle}</h1>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -151,8 +158,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Mon Compte</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>Profil</DropdownMenuItem>
-                <DropdownMenuItem>Paramètres</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/profil")}>Profil</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />

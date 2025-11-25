@@ -53,6 +53,7 @@ const Staff = () => {
 
   const [formName, setFormName] = useState("");
   const roles = [
+    "Superviseur",
     "Maître d'hôtel",
     "Serveurs",
     "Hôtesses",

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -20,6 +20,12 @@ interface TableItem {
   name: string;
   capacity: number;
   status: TableStatus;
+}
+
+interface StaffMember {
+  id: string;
+  name: string;
+  role: string;
 }
 
 const initialTables: TableItem[] = [
@@ -53,10 +59,34 @@ const EventTables = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<TableItem | null>(null);
 
+  const [eventAssignedStaff, setEventAssignedStaff] = useState<StaffMember[]>([]);
+  const [tableAssignments, setTableAssignments] = useState<Record<string, string[]>>({});
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignTable, setAssignTable] = useState<TableItem | null>(null);
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+
   const [formName, setFormName] = useState("");
   const [formCapacity, setFormCapacity] = useState("");
 
   const event = mockEvents.find((e) => e.id === id);
+
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const rawStaff = localStorage.getItem(`eventStaffAssigned:${id}`);
+      const staff: StaffMember[] = rawStaff ? JSON.parse(rawStaff) : [];
+      setEventAssignedStaff(staff);
+    } catch (_) {
+      setEventAssignedStaff([]);
+    }
+    try {
+      const rawAssign = localStorage.getItem(`eventTableAssignments:${id}`);
+      const assign: Record<string, string[]> = rawAssign ? JSON.parse(rawAssign) : {};
+      setTableAssignments(assign);
+    } catch (_) {
+      setTableAssignments({});
+    }
+  }, [id]);
 
   const filteredTables = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -79,6 +109,28 @@ const EventTables = () => {
     setFormName(table.name);
     setFormCapacity(table.capacity.toString());
     setDialogOpen(true);
+  };
+
+  const openAssignDialog = (table: TableItem) => {
+    setAssignTable(table);
+    const preselected = tableAssignments[table.id] || [];
+    setSelectedStaffIds(preselected);
+    setAssignDialogOpen(true);
+  };
+
+  const toggleSelectStaff = (staffId: string) => {
+    setSelectedStaffIds((prev) =>
+      prev.includes(staffId) ? prev.filter((id) => id !== staffId) : [...prev, staffId],
+    );
+  };
+
+  const saveAssignDialog = () => {
+    if (!id || !assignTable) return;
+    const next = { ...tableAssignments, [assignTable.id]: selectedStaffIds };
+    setTableAssignments(next);
+    localStorage.setItem(`eventTableAssignments:${id}`, JSON.stringify(next));
+    setAssignDialogOpen(false);
+    setAssignTable(null);
   };
 
   const handleDelete = (idToDelete: string) => {
@@ -157,6 +209,23 @@ const EventTables = () => {
         </CardContent>
       </Card>
 
+      {eventAssignedStaff.length === 0 && (
+        <Card>
+          <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              Aucun personnel n'est encore assigné à cet événement. Assignez d'abord des personnes pour pouvoir les affecter aux tables.
+            </div>
+            <Button
+              type="button"
+              className="bg-primary hover:bg-primary-hover text-white"
+              onClick={() => navigate(`/admin/events/${id}/staff`)}
+            >
+              Assigner du personnel à l'événement
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tables Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTables.map((table) => (
@@ -177,6 +246,35 @@ const EventTables = () => {
               </div>
             </CardHeader>
             <CardContent>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Personnel assigné</p>
+                  {Array.isArray(tableAssignments[table.id]) && tableAssignments[table.id].length > 0 ? (
+                    <ul className="mt-1 text-sm text-muted-foreground list-disc list-inside">
+                      {tableAssignments[table.id]
+                        .map((sid) => eventAssignedStaff.find((s) => s.id === sid))
+                        .filter(Boolean)
+                        .map((s) => (
+                          <li key={(s as StaffMember).id}>{(s as StaffMember).name}</li>
+                        ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">Aucune personne assignée à cette table</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => openAssignDialog(table)}
+                    disabled={eventAssignedStaff.length === 0}
+                  >
+                    Assigner des personnes
+                  </Button>
+                </div>
+              </div>
               <div className="mt-4 flex gap-2">
                 <Button
                   type="button"
@@ -246,6 +344,48 @@ const EventTables = () => {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assigner du personnel à {assignTable?.name}</DialogTitle>
+          </DialogHeader>
+          {eventAssignedStaff.length === 0 ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Aucun personnel n'est encore assigné à l'événement.</p>
+              <Button
+                type="button"
+                className="bg-primary hover:bg-primary-hover text-white"
+                onClick={() => navigate(`/admin/events/${id}/staff`)}
+              >
+                Assigner du personnel à l'événement
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-auto pr-1">
+              {eventAssignedStaff.map((s) => (
+                <label key={s.id} className="flex items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedStaffIds.includes(s.id)}
+                    onChange={() => toggleSelectStaff(s.id)}
+                  />
+                  <span className="text-foreground">{s.name}</span>
+                  <span className="text-muted-foreground">— {s.role}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <DialogFooter className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setAssignDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button type="button" className="bg-primary hover:bg-primary-hover" onClick={saveAssignDialog}>
+              Enregistrer
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

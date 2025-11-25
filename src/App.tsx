@@ -22,6 +22,7 @@ import UserPointages from "./pages/user/UserPointages";
 import Login from "./pages/Login";
 import { UserProvider } from "./context/UserContext";
 import { ProtectedRoute } from "./components/routing/ProtectedRoute";
+import Profile from "./pages/Profile";
 
 const queryClient = new QueryClient();
 
@@ -201,6 +202,18 @@ const App = () => (
                 <ProtectedRoute allowedRoles={["utilisateur"]}>
                   <AppLayout>
                     <UserPointages />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Profil (commun à tous les rôles) */}
+            <Route
+              path="/profil"
+              element={
+                <ProtectedRoute allowedRoles={["admin", "superadmin", "hotesse", "utilisateur"]}>
+                  <AppLayout>
+                    <Profile />
                   </AppLayout>
                 </ProtectedRoute>
               }

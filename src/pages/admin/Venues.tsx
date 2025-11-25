@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 
 type VenueStatus = "vide" | "en_attente" | "occupee";
+type VenueArea = "interieur" | "exterieur" | "les_deux";
 
 interface VenueItem {
   id: string;
@@ -20,6 +21,7 @@ interface VenueItem {
   capacity: number;
   location: string;
   status: VenueStatus;
+  area: VenueArea;
 }
 
 const initialVenues: VenueItem[] = [
@@ -29,6 +31,7 @@ const initialVenues: VenueItem[] = [
     capacity: 200,
     location: "Centre-ville",
     status: "vide",
+    area: "les_deux",
   },
   {
     id: "v2",
@@ -36,6 +39,7 @@ const initialVenues: VenueItem[] = [
     capacity: 500,
     location: "Quartier des affaires",
     status: "en_attente",
+    area: "interieur",
   },
   {
     id: "v3",
@@ -43,6 +47,7 @@ const initialVenues: VenueItem[] = [
     capacity: 150,
     location: "Bord de mer",
     status: "occupee",
+    area: "les_deux",
   },
 ];
 
@@ -68,6 +73,7 @@ const Venues = () => {
   const [formName, setFormName] = useState("");
   const [formCapacity, setFormCapacity] = useState("");
   const [formLocation, setFormLocation] = useState("");
+  const [formArea, setFormArea] = useState<VenueArea | "">("");
 
   const filteredVenues = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -87,6 +93,7 @@ const Venues = () => {
     setFormName("");
     setFormCapacity("");
     setFormLocation("");
+    setFormArea("");
     setDialogOpen(true);
   };
 
@@ -95,6 +102,7 @@ const Venues = () => {
     setFormName(venue.name);
     setFormCapacity(venue.capacity.toString());
     setFormLocation(venue.location);
+    setFormArea(venue.area);
     setDialogOpen(true);
   };
 
@@ -106,7 +114,7 @@ const Venues = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName || !formCapacity || !formLocation) return;
+    if (!formName || !formCapacity || !formLocation || !formArea) return;
 
     const capacityValue = Number(formCapacity);
     if (Number.isNaN(capacityValue) || capacityValue <= 0) return;
@@ -117,6 +125,7 @@ const Venues = () => {
       capacity: capacityValue,
       location: formLocation,
       status: editingVenue?.status ?? "vide",
+      area: formArea as VenueArea,
     };
 
     setVenues((prev) => {
@@ -266,6 +275,21 @@ const Venues = () => {
                   placeholder="Ex: Centre-ville, Quartier des affaires..."
                   required
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Type d'espace</label>
+                <select
+                  aria-label="Sélectionner le type d'espace"
+                  className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
+                  value={formArea}
+                  onChange={(e) => setFormArea(e.target.value as VenueArea)}
+                  required
+                >
+                  <option value="">Choisir...</option>
+                  <option value="interieur">Intérieur</option>
+                  <option value="exterieur">Extérieur</option>
+                  <option value="les_deux">Les deux</option>
+                </select>
               </div>
             </div>
 
