@@ -59,14 +59,21 @@ class CompanyController extends Controller
             ], 422);
         }
 
-        if ($email && User::whereRaw('lower(email) = ?', [$email])->exists()) {
-            return response()->json([
-                'message' => "Cet email est déjà utilisé par un utilisateur.",
-                'field' => 'email',
-            ], 422);
+        // Si un utilisateur avec cet email existe déjà:
+        // - s'il n'est rattaché à aucune entreprise, on le rattachera à la nouvelle company
+        // - s'il est déjà rattaché à une entreprise, on bloque
+        $existingUser = null;
+        if ($email) {
+            $existingUser = User::whereRaw('lower(email) = ?', [$email])->first();
+            if ($existingUser && !empty($existingUser->company_id)) {
+                return response()->json([
+                    'message' => "Cet email est déjà utilisé par un utilisateur d'une autre entreprise.",
+                    'field' => 'email',
+                ], 422);
+            }
         }
 
-        $company = DB::transaction(function () use ($slug, $data, $email) {
+        $company = DB::transaction(function () use ($slug, $data, $email, $existingUser) {
             $company = Company::create([
                 'name_slug' => $slug,
                 'name' => $data['name'],
@@ -76,17 +83,24 @@ class CompanyController extends Controller
                 'status' => 'active',
             ]);
 
-            // Créer aussi un utilisateur pour l'entreprise (si email fourni)
+            // Créer ou lier l'utilisateur admin à l'entreprise (si email fourni)
             if ($email) {
-                User::create([
-                    'name' => $data['adminName'] ?? $data['name'],
-                    'email' => $email,
-                    // sera hashé automatiquement via cast 'password' => 'hashed'
-                    'password' => "password123",
-                    // 'password' => Str::random(12),
-                    'role' => 'superadmin',
-                    'company_id' => $company->id,
-                ]);
+                if ($existingUser) {
+                    // Lier l'utilisateur existant non rattaché
+                    $existingUser->name = $data['adminName'] ?? ($existingUser->name ?: $data['name']);
+                    if (!$existingUser->role) { $existingUser->role = 'admin'; }
+                    $existingUser->company_id = $company->id;
+                    $existingUser->save();
+                } else {
+                    User::create([
+                        'name' => $data['adminName'] ?? $data['name'],
+                        'email' => $email,
+                        // sera hashé automatiquement via cast 'password' => 'hashed'
+                        'password' => "password123",
+                        'role' => 'admin',
+                        'company_id' => $company->id,
+                    ]);
+                }
             }
 
             return $company;

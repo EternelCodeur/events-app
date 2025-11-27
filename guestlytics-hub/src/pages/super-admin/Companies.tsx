@@ -113,6 +113,11 @@ const Companies = () => {
 
   // Sync temps réel multi-onglets via SSE
   useEffect(() => {
+    const enableSSE = false;
+    if (!enableSSE) {
+      // SSE désactivé en mode déconnecté (mock)
+      return;
+    }
     const es = new EventSource(`/api/companies/stream`, { withCredentials: true } as EventSourceInit);
 
     const handleCreated = (ev: MessageEvent) => {

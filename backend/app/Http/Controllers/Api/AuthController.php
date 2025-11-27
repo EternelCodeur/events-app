@@ -33,7 +33,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Identifiants invalides'], 401);
         }
 
-        // Vérifier l'état de l'entreprise liée (si existante)
+        // Vérifier l'état de l'entreprise liée (si existante) pour tous les rôles
         if (!empty($user->company_id)) {
             $company = Company::find($user->company_id);
             if ($company && ($company->status ?? 'active') !== 'active') {

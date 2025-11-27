@@ -34,7 +34,7 @@ class JwtAuth
             if (!$user) {
                 return response()->json(['message' => 'Unauthenticated'], 401);
             }
-            // Vérifier statut de l'entreprise si liée
+            // Vérifier statut de l'entreprise si liée (tous rôles)
             if (!empty($user->company_id)) {
                 $company = Company::find($user->company_id);
                 if ($company && ($company->status ?? 'active') !== 'active') {

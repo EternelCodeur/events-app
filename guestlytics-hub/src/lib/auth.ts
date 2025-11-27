@@ -8,6 +8,7 @@ export type AuthUser = {
 };
 
 let currentUser: AuthUser | null = null;
+const STORAGE_KEY = "guestlytics_auth_user";
 
 export async function login(
   email: string,
@@ -30,17 +31,36 @@ export async function login(
     role: inferredRole,
   };
   currentUser = user;
+  if (_remember) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    } catch (_e) { void 0; }
+  }
   return user;
 }
 
 export async function logout(): Promise<void> {
   currentUser = null;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (_e) { void 0; }
 }
 
 export async function getMe(): Promise<AuthUser | null> {
+  if (currentUser) return currentUser;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AuthUser;
+    currentUser = parsed ?? null;
+  } catch {
+    currentUser = null;
+  }
   return currentUser;
 }
 
 export async function refresh(): Promise<boolean> {
-  return !!currentUser;
+  if (currentUser) return true;
+  const me = await getMe();
+  return !!me;
 }
