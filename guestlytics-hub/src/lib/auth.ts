@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Requests use relative '/api' so Vite proxy routes to backend in dev
 
 export type AuthUser = {
@@ -8,59 +9,135 @@ export type AuthUser = {
 };
 
 let currentUser: AuthUser | null = null;
+let currentToken: string | null = null;
 const STORAGE_KEY = "guestlytics_auth_user";
+const SESSION_KEY = "guestlytics_auth_user_session";
+const TOKEN_KEY = "guestlytics_auth_token";
+const TOKEN_SESSION_KEY = "guestlytics_auth_token_session";
+
+export function getToken(): string | null {
+  if (currentToken) return currentToken;
+  try {
+    const s = sessionStorage.getItem(TOKEN_SESSION_KEY);
+    if (s) return (currentToken = s);
+  } catch { /* noop */ }
+  try {
+    const p = localStorage.getItem(TOKEN_KEY);
+    if (p) return (currentToken = p);
+  } catch { /* noop */ }
+  return null;
+}
+
+function persistAuth(user: AuthUser, token: string, remember: boolean) {
+  currentUser = user;
+  currentToken = token;
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    sessionStorage.setItem(TOKEN_SESSION_KEY, token);
+  } catch { /* noop */ }
+  if (remember) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+      localStorage.setItem(TOKEN_KEY, token);
+    } catch { /* noop */ }
+  }
+}
 
 export async function login(
   email: string,
-  _password: string,
-  _remember: boolean,
-  role?: "superadmin" | "admin" | "hotesse" | "utilisateur",
+  password: string,
+  remember: boolean,
 ): Promise<AuthUser> {
-  const inferredRole = role
-    ?? (email.toLowerCase().includes("super")
-      ? "superadmin"
-      : email.toLowerCase().includes("hotesse")
-      ? "hotesse"
-      : email.toLowerCase().includes("user")
-      ? "utilisateur"
-      : "admin");
-  const user: AuthUser = {
-    id: Math.random().toString(36).slice(2),
-    name: email.split("@")[0] || "Utilisateur",
-    email,
-    role: inferredRole,
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = (await res.json()) as unknown as {
+    access_token: string;
+    token_type: string;
+    expires_in: number;
+    user: AuthUser;
   };
-  currentUser = user;
-  if (_remember) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-    } catch (_e) { void 0; }
-  }
+  if (!res.ok) throw new Error((data as any)?.message || "Identifiants invalides");
+  // Le backend peut ne pas renvoyer 'role'; fallback 'admin' côté UI
+  const user: AuthUser = {
+    id: String((data.user as Record<string, unknown>)?.id ?? ""),
+    name: (data.user as Record<string, unknown>)?.name as string ?? "Utilisateur",
+    email: (data.user as Record<string, unknown>)?.email as string ?? email,
+    role: ((data.user as Record<string, unknown>)?.role as AuthUser["role"]) ?? ("admin" as const),
+  };
+  persistAuth(user, data.access_token, remember);
   return user;
 }
 
 export async function logout(): Promise<void> {
+  const token = getToken();
+  if (token) {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch { /* noop */ }
+  }
   currentUser = null;
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch (_e) { void 0; }
+  currentToken = null;
+  try { localStorage.removeItem(STORAGE_KEY); } catch (_e) { void 0; }
+  try { localStorage.removeItem(TOKEN_KEY); } catch (_e) { void 0; }
+  try { sessionStorage.removeItem(SESSION_KEY); } catch (_e) { void 0; }
+  try { sessionStorage.removeItem(TOKEN_SESSION_KEY); } catch (_e) { void 0; }
 }
 
 export async function getMe(): Promise<AuthUser | null> {
   if (currentUser) return currentUser;
+  // rehydrate from storage
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as AuthUser;
-    currentUser = parsed ?? null;
+    const sUser = sessionStorage.getItem(SESSION_KEY);
+    if (sUser) currentUser = (JSON.parse(sUser) as AuthUser) ?? null;
+  } catch { currentUser = null; }
+  if (currentUser) return currentUser;
+  try {
+    const lUser = localStorage.getItem(STORAGE_KEY);
+    if (lUser) currentUser = (JSON.parse(lUser) as AuthUser) ?? null;
+  } catch { currentUser = null; }
+  if (currentUser) return currentUser;
+  // fetch from backend if token exists
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const res = await fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const u = (await res.json()) as Record<string, unknown>;
+    const user: AuthUser = {
+      id: String((u?.id as string | number | undefined) ?? ""),
+      name: (u?.name as string | undefined) ?? "Utilisateur",
+      email: (u?.email as string | undefined) ?? "",
+      role: (u?.role as AuthUser["role"]) ?? ("admin" as const),
+    };
+    currentUser = user;
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch { /* empty */ }
+    return user;
   } catch {
-    currentUser = null;
+    return null;
   }
-  return currentUser;
 }
 
 export async function refresh(): Promise<boolean> {
-  if (currentUser) return true;
-  const me = await getMe();
-  return !!me;
+  const token = getToken();
+  if (!token) return false;
+  try {
+    const res = await fetch("/api/auth/refresh", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return false;
+    const data = (await res.json()) as Record<string, unknown>;
+    const newToken = data?.access_token as string | undefined;
+    if (!newToken) return false;
+    // keep same user in memory/storage
+    const user = await getMe();
+    if (user) persistAuth(user, newToken, !!localStorage.getItem(TOKEN_KEY));
+    else currentToken = newToken;
+    return true;
+  } catch {
+    return false;
+  }
 }

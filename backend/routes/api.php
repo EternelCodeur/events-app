@@ -1,15 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\CompanyController;
+use App\Http\Controllers\Api\EntrepriseController;
 use App\Http\Controllers\Api\AuthController;
 
-Route::post('auth/login', [AuthController::class, 'login']);
-Route::post('auth/refresh', [AuthController::class, 'refresh']);
-Route::get('companies/stream', [CompanyController::class, 'stream']);
+Route::prefix('auth')->group(function () {
+    Route::post('login', [AuthController::class, 'login']);
+    Route::middleware('jwt')->group(function () {
+        Route::get('me', [AuthController::class, 'me']);
+        Route::post('logout', [AuthController::class, 'logout']);
+        Route::post('refresh', [AuthController::class, 'refresh']);
+    });
+});
 
-Route::middleware(['auth.jwt'])->group(function () {
-    Route::apiResource('companies', CompanyController::class);
-    Route::post('auth/logout', [AuthController::class, 'logout']);
-    Route::get('auth/me', [AuthController::class, 'me']);
+Route::middleware(['jwt', 'role:superadmin'])->group(function () {
+    Route::apiResource('entreprises', EntrepriseController::class);
 });

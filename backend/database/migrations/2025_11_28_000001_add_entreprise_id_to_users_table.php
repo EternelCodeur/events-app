@@ -4,22 +4,23 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'company_id')) {
-                $table->foreignId('company_id')->nullable()->constrained('companies')->cascadeOnDelete();
-            }
+            $table->foreignId('entreprise_id')
+                ->nullable()
+                ->constrained('entreprises')
+                ->cascadeOnDelete();
         });
     }
 
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'company_id')) {
-                $table->dropConstrainedForeignId('company_id');
-            }
+            $table->dropForeign(['entreprise_id']);
+            $table->dropColumn('entreprise_id');
         });
     }
 };

@@ -3,161 +3,97 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Models\Company;
-use App\Services\JwtService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Symfony\Component\HttpFoundation\Cookie;
+use App\Models\User;
+use App\Models\Entreprise;
+use Firebase\JWT\JWT;
 
 class AuthController extends Controller
 {
-    private JwtService $jwt;
-
-    public function __construct(JwtService $jwt)
-    {
-        $this->jwt = $jwt;
-    }
-
     public function login(Request $request)
     {
-        $data = $request->validate([
+        $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
-            'remember' => ['sometimes', 'boolean'],
         ]);
-
-        $emailLower = strtolower($data['email']);
-        $user = User::where('email', $emailLower)->first();
-        if (!$user || !Hash::check($data['password'], $user->password)) {
+        $user = User::where('email', $credentials['email'])->first();
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             return response()->json(['message' => 'Identifiants invalides'], 401);
         }
 
-        // Vérifier l'état de l'entreprise liée (si existante) pour tous les rôles
-        if (!empty($user->company_id)) {
-            $company = Company::find($user->company_id);
-            if ($company && ($company->status ?? 'active') !== 'active') {
+        // Vérification d'entreprise active pour les rôles non-superadmin
+        if (in_array($user->role ?? 'admin', ['admin', 'hotesse', 'utilisateur'], true)) {
+            if (!$user->entreprise_id) {
+                return response()->json(['message' => "Aucune entreprise associée à ce compte"], 403);
+            }
+            $entreprise = Entreprise::find($user->entreprise_id);
+            if (!$entreprise || $entreprise->status !== 'active') {
                 return response()->json(['message' => "L'entreprise est inactive"], 403);
             }
         }
 
-        $remember = (bool)($data['remember'] ?? false);
-
-        // TTLs (minutes)
-        $accessTtlMinutes = $remember ? (14 * 24 * 60) : (24 * 60); // 2 semaines sinon 1 jour
-        $refreshTtlMinutes = 30 * 24 * 60; // 1 mois
-
-        $claims = [
-            'sub' => (string) $user->id,
-            'role' => $user->role ?? 'user',
-            'email' => $user->email,
-        ];
-
-        $accessToken = $this->jwt->generate($claims, $accessTtlMinutes * 60, 'access');
-        $refreshToken = $this->jwt->generate(['sub' => (string)$user->id], $refreshTtlMinutes * 60, 'refresh');
-
-        $response = response()->json([
-            'user' => [
-                'id' => (string) $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role ?? 'user',
-            ],
-        ]);
-
-        $secure = app()->environment('production');
-        $response->headers->setCookie(
-            Cookie::create('access_token')
-                ->withValue($accessToken)
-                ->withPath('/')
-                ->withHttpOnly(true)
-                ->withSecure($secure)
-                ->withSameSite('lax')
-                ->withExpires(time() + ($accessTtlMinutes * 60))
-        );
-        $response->headers->setCookie(
-            Cookie::create('refresh_token')
-                ->withValue($refreshToken)
-                ->withPath('/')
-                ->withHttpOnly(true)
-                ->withSecure($secure)
-                ->withSameSite('lax')
-                ->withExpires(time() + ($refreshTtlMinutes * 60))
-        );
-
-        return $response;
+        $token = $this->issueToken($user->id, $user->role ?? null);
+        return $this->respondWithToken($token, $user);
     }
 
     public function me(Request $request)
     {
-        $user = $request->attributes->get('auth_user');
-        if (!$user) {
-            return response()->json(['message' => 'Unauthenticated'], 401);
-        }
-        return response()->json([
-            'id' => (string) $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => $user->role ?? 'user',
-        ]);
-    }
-
-    public function refresh(Request $request)
-    {
-        $refresh = (string) $request->cookies->get('refresh_token', '');
-        if (!$refresh) {
-            return response()->json(['message' => 'No refresh token'], 401);
-        }
-
-        try {
-            $payload = $this->jwt->decode($refresh);
-            if (($payload['type'] ?? '') !== 'refresh') {
-                return response()->json(['message' => 'Invalid token type'], 401);
-            }
-            $userId = (string) ($payload['sub'] ?? '');
-            $user = $userId ? User::find($userId) : null;
-            if (!$user) {
-                return response()->json(['message' => 'User not found'], 401);
-            }
-        } catch (\Throwable $e) {
-            return response()->json(['message' => 'Invalid token'], 401);
-        }
-
-        // Après refresh, access token = 1 mois
-        $accessTtlMinutes = 30 * 24 * 60;
-        $claims = [
-            'sub' => (string) $user->id,
-            'role' => $user->role ?? 'user',
-            'email' => $user->email,
-        ];
-        $accessToken = $this->jwt->generate($claims, $accessTtlMinutes * 60, 'access');
-
-        $secure = app()->environment('production');
-        $response = response()->json(['message' => 'refreshed']);
-        $response->headers->setCookie(
-            Cookie::create('access_token')
-                ->withValue($accessToken)
-                ->withPath('/')
-                ->withHttpOnly(true)
-                ->withSecure($secure)
-                ->withSameSite('lax')
-                ->withExpires(time() + ($accessTtlMinutes * 60))
-        );
-
-        return $response;
+        return response()->json($request->user());
     }
 
     public function logout()
     {
-        $secure = app()->environment('production');
-        $expired = time() - 3600;
-        $response = response()->noContent();
-        $response->headers->setCookie(
-            Cookie::create('access_token')->withValue('')->withPath('/')->withHttpOnly(true)->withSecure($secure)->withSameSite('lax')->withExpires($expired)
-        );
-        $response->headers->setCookie(
-            Cookie::create('refresh_token')->withValue('')->withPath('/')->withHttpOnly(true)->withSecure($secure)->withSameSite('lax')->withExpires($expired)
-        );
-        return $response;
+        // Stateless JWT: rien à invalider côté serveur par défaut
+        return response()->json(['message' => 'Déconnecté']);
+    }
+
+    public function refresh()
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+        $token = $this->issueToken($user->id, $user->role ?? null);
+        return $this->respondWithToken($token, $user);
+    }
+
+    protected function respondWithToken(string $token, User $user)
+    {
+        $ttlSeconds = (int) (config('jwt.ttl', 60) * 60);
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => $ttlSeconds,
+            'user' => $user,
+        ]);
+    }
+
+    private function issueToken(int|string $userId, ?string $role = null): string
+    {
+        $ttlSeconds = (int) (config('jwt.ttl', 60) * 60);
+        $now = time();
+        $payload = [
+            'iss' => config('app.url', url('/')),
+            'iat' => $now,
+            'nbf' => $now,
+            'exp' => $now + $ttlSeconds,
+            'sub' => $userId,
+            'role' => $role,
+        ];
+        $secret = $this->getSecret();
+        return JWT::encode($payload, $secret, 'HS256');
+    }
+
+    private function getSecret(): string
+    {
+        $env = (string) env('JWT_SECRET', '');
+        if ($env !== '') return $env;
+        $appKey = (string) config('app.key');
+        if (str_starts_with($appKey, 'base64:')) {
+            return (string) base64_decode(substr($appKey, 7));
+        }
+        return $appKey;
     }
 }

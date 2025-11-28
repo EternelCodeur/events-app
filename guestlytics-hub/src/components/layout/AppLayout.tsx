@@ -110,8 +110,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
           <div className="flex items-center gap-4">
             {role === "superadmin" ? (
               <div className="flex items-center gap-2">
-                <img src="/ng-events.png" alt="Logo" className="h-17 w-36" />
-                <h1 className="text-xl font-semibold text-foreground">{headerTitle}</h1>
+                <img src="/ng-events.png" alt="Logo" className="h-17 w-32" />
               </div>
             ) : (
               <h1 className="text-xl font-semibold text-foreground">{headerTitle}</h1>

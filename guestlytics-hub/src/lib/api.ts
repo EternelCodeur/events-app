@@ -22,66 +22,72 @@ export type CompanyUpdatePayload = {
   status?: "active" | "inactive";
 };
 
-// In-memory mock database
-let companies: Company[] = [
-  {
-    id: "coy-1",
-    name: "Acme Events",
-    email: "contact@acme.test",
-    phone: "+33 1 23 45 67 89",
-    adminName: "Alice",
-    status: "active",
-  },
-  {
-    id: "coy-2",
-    name: "Nguia Entertainment",
-    email: "hello@nguia.test",
-    phone: "+33 6 00 00 00 00",
-    adminName: "Bob",
-    status: "inactive",
-  },
-];
+const API_BASE = "/api/entreprises";
 
-function delay(ms = 150): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+// Lazy import to avoid circular deps between auth and api
+async function getAuthHeader(): Promise<HeadersInit> {
+  try {
+    const { getToken } = await import("./auth");
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+function hasMessage(x: unknown): x is { message: string } {
+  return (
+    typeof x === "object" &&
+    x !== null &&
+    "message" in x &&
+    typeof (x as { message?: unknown }).message === "string"
+  );
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const authHeader = await getAuthHeader();
+  const headers: HeadersInit = init.body
+    ? { "Content-Type": "application/json", ...authHeader, ...(init.headers || {}) }
+    : { ...authHeader, ...(init.headers || {}) };
+  const res = await fetch(path, {
+    credentials: "include",
+    ...init,
+    headers,
+  });
+  const text = await res.text();
+  const data = text ? (JSON.parse(text) as unknown) : null;
+  if (!res.ok) {
+    const msg = hasMessage(data) ? data.message : `HTTP ${res.status}`;
+    throw new Error(String(msg));
+  }
+  return data as T;
 }
 
 export async function getCompanies(): Promise<Company[]> {
-  await delay();
-  return companies.slice();
+  return request<Company[]>(`${API_BASE}`, { method: "GET" });
 }
 
 export async function createCompany(payload: CompanyPayload): Promise<Company> {
-  await delay();
-  const newCompany: Company = {
-    id: Math.random().toString(36).slice(2),
-    name: payload.name,
-    email: payload.email ?? null,
-    phone: payload.phone ?? null,
-    adminName: payload.adminName ?? null,
-    status: "active",
-  };
-  companies = [newCompany, ...companies];
-  return newCompany;
+  return request<Company>(`${API_BASE}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function updateCompany(
   id: string,
   payload: CompanyUpdatePayload,
 ): Promise<Company> {
-  await delay();
-  const idx = companies.findIndex((c) => c.id === id);
-  if (idx === -1) throw new Error("Company not found");
-  const updated: Company = { ...companies[idx], ...payload };
-  companies[idx] = updated;
-  return updated;
+  return request<Company>(`${API_BASE}/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function deleteCompany(id: string): Promise<void> {
-  await delay();
-  const before = companies.length;
-  companies = companies.filter((c) => c.id !== id);
-  if (companies.length === before) throw new Error("Company not found");
+  await request<void>(`${API_BASE}/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 export async function updateCompanyStatus(

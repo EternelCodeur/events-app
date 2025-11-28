@@ -199,8 +199,7 @@ const Companies = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdateCompany = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleUpdateCompany = async () => {
     if (!editingId) return;
     try {
       const updated = await updateCompany(editingId, {
@@ -351,7 +350,7 @@ const Companies = () => {
             Mettez à jour les informations de l'entreprise sélectionnée.
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-4" onSubmit={handleUpdateCompany}>
+        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
           <div className="space-y-1">
             <label className="text-sm font-medium text-foreground" htmlFor="edit-company-name">
               Nom de l'entreprise
@@ -409,7 +408,7 @@ const Companies = () => {
             >
               Annuler
             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary-hover">
+            <Button type="button" onClick={handleUpdateCompany} className="bg-primary hover:bg-primary-hover">
               Enregistrer
             </Button>
           </DialogFooter>
