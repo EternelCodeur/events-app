@@ -11,8 +11,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  getVenues as fetchVenues,
+  createVenue as apiCreateVenue,
+  updateVenue as apiUpdateVenue,
+  deleteVenue as apiDeleteVenue,
+} from "@/lib/venues";
 
-type VenueStatus = "vide" | "en_attente" | "occupee";
+type VenueStatus = "vide" | "en_attente" | "occupe";
 type VenueArea = "interieur" | "exterieur" | "les_deux";
 
 interface VenueItem {
@@ -24,47 +30,20 @@ interface VenueItem {
   area: VenueArea;
 }
 
-const initialVenues: VenueItem[] = [
-  {
-    id: "v1",
-    name: "Salle Royale",
-    capacity: 200,
-    location: "Centre-ville",
-    status: "vide",
-    area: "les_deux",
-  },
-  {
-    id: "v2",
-    name: "Centre Convention",
-    capacity: 500,
-    location: "Quartier des affaires",
-    status: "en_attente",
-    area: "interieur",
-  },
-  {
-    id: "v3",
-    name: "Grand Hôtel",
-    capacity: 150,
-    location: "Bord de mer",
-    status: "occupee",
-    area: "les_deux",
-  },
-];
-
 const statusColors: Record<VenueStatus, string> = {
   vide: "bg-muted text-foreground/80",
   en_attente: "bg-amber-500 hover:bg-amber-600",
-  occupee: "bg-success hover:bg-success/90",
+  occupe: "bg-success hover:bg-success/90",
 };
 
 const statusLabels: Record<VenueStatus, string> = {
   vide: "Vide",
   en_attente: "En attente",
-  occupee: "Occupée",
+  occupe: "Occupé",
 };
 
 const Venues = () => {
-  const [venues, setVenues] = useState<VenueItem[]>(initialVenues);
+  const [venues, setVenues] = useState<VenueItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"tous" | VenueStatus>("tous");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -74,6 +53,18 @@ const Venues = () => {
   const [formCapacity, setFormCapacity] = useState("");
   const [formLocation, setFormLocation] = useState("");
   const [formArea, setFormArea] = useState<VenueArea | "">("");
+  const [formStatus, setFormStatus] = useState<VenueStatus>("vide");
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const data = await fetchVenues();
+        setVenues(data as unknown as VenueItem[]);
+      } catch (e) {
+        console.warn("Failed to fetch venues", e);
+      }
+    })();
+  }, []);
 
   const filteredVenues = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -94,6 +85,7 @@ const Venues = () => {
     setFormCapacity("");
     setFormLocation("");
     setFormArea("");
+    setFormStatus("vide");
     setDialogOpen(true);
   };
 
@@ -103,39 +95,51 @@ const Venues = () => {
     setFormCapacity(venue.capacity.toString());
     setFormLocation(venue.location);
     setFormArea(venue.area);
+    setFormStatus(venue.status);
     setDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Supprimer définitivement cette salle ?")) {
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Supprimer définitivement cette salle ?")) return;
+    try {
+      await apiDeleteVenue(id);
       setVenues((prev) => prev.filter((v) => v.id !== id));
+    } catch (e) {
+      console.warn("Failed to delete venue", e);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName || !formCapacity || !formLocation || !formArea) return;
 
     const capacityValue = Number(formCapacity);
     if (Number.isNaN(capacityValue) || capacityValue <= 0) return;
 
-    const payload: VenueItem = {
-      id: editingVenue ? editingVenue.id : Date.now().toString(),
-      name: formName,
-      capacity: capacityValue,
-      location: formLocation,
-      status: editingVenue?.status ?? "vide",
-      area: formArea as VenueArea,
-    };
-
-    setVenues((prev) => {
+    try {
       if (editingVenue) {
-        return prev.map((v) => (v.id === editingVenue.id ? payload : v));
+        const updated = await apiUpdateVenue(editingVenue.id, {
+          name: formName,
+          capacity: capacityValue,
+          location: formLocation,
+          status: formStatus,
+          area: formArea as VenueArea,
+        });
+        setVenues((prev) => prev.map((v) => (v.id === editingVenue.id ? (updated as unknown as VenueItem) : v)));
+      } else {
+        const created = await apiCreateVenue({
+          name: formName,
+          capacity: capacityValue,
+          location: formLocation,
+          status: formStatus,
+          area: formArea as VenueArea,
+        });
+        setVenues((prev) => [...prev, created as unknown as VenueItem]);
       }
-      return [...prev, payload];
-    });
-
-    setDialogOpen(false);
+      setDialogOpen(false);
+    } catch (err) {
+      console.warn("Failed to save venue", err);
+    }
   };
 
   return (
@@ -182,7 +186,7 @@ const Venues = () => {
                 <option value="tous">Tous les statuts</option>
                 <option value="vide">Vide</option>
                 <option value="en_attente">En attente</option>
-                <option value="occupee">Occupée</option>
+                <option value="occupe">Occupé</option>
               </select>
             </div>
           </div>
@@ -247,7 +251,7 @@ const Venues = () => {
             </DialogHeader>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-sm font-medium mb-1">Nom de la salle</label>
                 <Input
                   value={formName}
