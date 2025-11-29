@@ -54,6 +54,7 @@ const Venues = () => {
   const [formLocation, setFormLocation] = useState("");
   const [formArea, setFormArea] = useState<VenueArea | "">("");
   const [formStatus, setFormStatus] = useState<VenueStatus>("vide");
+  const [formError, setFormError] = useState("");
 
   React.useEffect(() => {
     (async () => {
@@ -86,6 +87,7 @@ const Venues = () => {
     setFormLocation("");
     setFormArea("");
     setFormStatus("vide");
+    setFormError("");
     setDialogOpen(true);
   };
 
@@ -96,6 +98,7 @@ const Venues = () => {
     setFormLocation(venue.location);
     setFormArea(venue.area);
     setFormStatus(venue.status);
+    setFormError("");
     setDialogOpen(true);
   };
 
@@ -111,6 +114,7 @@ const Venues = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     if (!formName || !formCapacity || !formLocation || !formArea) return;
 
     const capacityValue = Number(formCapacity);
@@ -139,6 +143,8 @@ const Venues = () => {
       setDialogOpen(false);
     } catch (err) {
       console.warn("Failed to save venue", err);
+      const message = err instanceof Error ? err.message : "Erreur lors de l'enregistrement";
+      setFormError(message);
     }
   };
 
@@ -249,6 +255,11 @@ const Venues = () => {
                 {editingVenue ? "Modifier la salle" : "Nouvelle salle"}
               </DialogTitle>
             </DialogHeader>
+            {formError && (
+              <div className="text-sm text-red-600" role="alert">
+                {formError}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

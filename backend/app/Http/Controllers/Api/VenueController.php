@@ -38,6 +38,18 @@ class VenueController extends Controller
             abort(422, 'Entreprise non définie');
         }
 
+        // Prevent duplicate venue (same core information within entreprise)
+        $dupExists = Venue::query()
+            ->where('entreprise_id', $entrepriseId)
+            ->where('name', $data['name'])
+            ->where('location', $data['location'])
+            ->where('area', $data['area'])
+            ->where('capacity', $data['capacity'])
+            ->exists();
+        if ($dupExists) {
+            abort(422, 'Cette salle existe déjà');
+        }
+
         $venue = Venue::create([
             'name' => $data['name'],
             'capacity' => $data['capacity'],
@@ -72,6 +84,25 @@ class VenueController extends Controller
             'location' => ['sometimes', 'string', 'max:191'],
             'area' => ['sometimes', 'in:interieur,exterieur,les_deux'],
         ]);
+
+        // Compute new values without persisting yet
+        $newName = array_key_exists('name', $data) ? $data['name'] : $venue->name;
+        $newCapacity = array_key_exists('capacity', $data) ? $data['capacity'] : $venue->capacity;
+        $newLocation = array_key_exists('location', $data) ? $data['location'] : $venue->location;
+        $newArea = array_key_exists('area', $data) ? $data['area'] : $venue->area;
+
+        // Prevent duplicate with final values
+        $dupExists = Venue::query()
+            ->where('entreprise_id', $venue->entreprise_id)
+            ->where('id', '<>', $venue->id)
+            ->where('name', $newName)
+            ->where('location', $newLocation)
+            ->where('area', $newArea)
+            ->where('capacity', $newCapacity)
+            ->exists();
+        if ($dupExists) {
+            abort(422, 'Cette salle existe déjà');
+        }
 
         $venue->fill($data);
         $venue->save();

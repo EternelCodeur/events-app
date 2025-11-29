@@ -35,15 +35,22 @@ async function getAuthHeader(): Promise<HeadersInit> {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const authHeader = await getAuthHeader();
   const headers: HeadersInit = init.body
-    ? { "Content-Type": "application/json", ...authHeader, ...(init.headers || {}) }
-    : { ...authHeader, ...(init.headers || {}) };
+    ? { "Content-Type": "application/json", Accept: "application/json", ...authHeader, ...(init.headers || {}) }
+    : { Accept: "application/json", ...authHeader, ...(init.headers || {}) };
   const res = await fetch(path, {
     credentials: "include",
     ...init,
     headers,
   });
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : null;
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text) as unknown;
+    } catch {
+      data = { message: text } as unknown;
+    }
+  }
   function hasMessage(x: unknown): x is { message: string } {
     return (
       typeof x === "object" && x !== null &&

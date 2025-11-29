@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Search, Filter, Pencil, Trash2, CheckCircle2, XCircle, X } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, CheckCircle2, XCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  getEvents as fetchEvents,
+  createEvent as apiCreateEvent,
+  updateEvent as apiUpdateEvent,
+  deleteEvent as apiDeleteEvent,
+} from "@/lib/events";
+import { getVenues as fetchVenues } from "@/lib/venues";
 
-type EventStatus = "confirme" | "en_attente" | "termine" | "annule";
+type EventStatus = "en_attente" | "confirme" | "annuler";
 type VenueArea = "interieur" | "exterieur" | "les_deux";
 type EventType = "mariage" | "celebration_religieuse" | "cocktail";
 
@@ -34,74 +41,28 @@ interface EventItem {
   mariageExteriorSubtype?: "civil" | "coutumier";
 }
 
-const venues: { id: string; name: string; area: VenueArea }[] = [
-  { id: "salle-royale", name: "Salle Royale", area: "les_deux" },
-  { id: "centre-convention", name: "Centre Convention", area: "interieur" },
-  { id: "grand-hotel", name: "Grand Hôtel", area: "les_deux" },
-];
-
-const initialEvents: EventItem[] = [
-  {
-    id: "1",
-    title: "Mariage Dupont",
-    date: "2025-01-20",
-    startTime: "18:00",
-    endTime: "02:00",
-    venue: "salle-royale",
-    guests: 150,
-    status: "confirme",
-    budget: "15,000FCFA",
-  },
-  {
-    id: "2",
-    title: "Conférence Tech 2025",
-    date: "2025-01-25",
-    startTime: "09:00",
-    endTime: "17:00",
-    venue: "centre-convention",
-    guests: 300,
-    status: "en_attente",
-    budget: "30,000FCFA",
-  },
-  {
-    id: "3",
-    title: "Gala Entreprise ABC",
-    date: "2025-02-10",
-    startTime: "20:00",
-    endTime: "01:00",
-    venue: "grand-hotel",
-    guests: 200,
-    status: "confirme",
-    budget: "25,000FCFA",
-  },
-];
+// Les événements sont chargés depuis l'API
 
 const statusColors: Record<EventStatus | "all", string> = {
-  confirme: "bg-success hover:bg-success/90",
   en_attente: "bg-accent hover:bg-accent/90",
-  termine: "bg-muted hover:bg-muted/90",
-  annule: "bg-destructive hover:bg-destructive/90",
+  confirme: "bg-success hover:bg-success/90",
+  annuler: "bg-destructive hover:bg-destructive/90",
   all: "bg-muted",
 };
 
-const statusLabels = {
-  confirme: "Confirmé",
+const statusLabels: Record<EventStatus, string> = {
   en_attente: "En attente",
-  termine: "Terminé",
-  annule: "Annulé",
+  confirme: "Confirmé",
+  annuler: "Annulé",
 };
 
 const Events = () => {
-  const [events, setEvents] = useState<EventItem[]>(() => {
-    try {
-      const raw = localStorage.getItem("events");
-      return raw ? (JSON.parse(raw) as EventItem[]) : initialEvents;
-    } catch (_) {
-      return initialEvents;
-    }
-  });
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [venues, setVenues] = useState<
+    { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]
+  >([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "confirme" | "en_attente" | "termine" | "annule">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | EventStatus>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -109,13 +70,18 @@ const Events = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    try {
-      localStorage.setItem("events", JSON.stringify(events));
-    } catch (_) {
-      // ignore persistence errors
-    }
-  }, [events]);
+    (async () => {
+      try {
+        const [vs, es] = await Promise.all([fetchVenues(), fetchEvents()]);
+        setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+        setEvents(es as unknown as EventItem[]);
+      } catch (e) {
+        console.warn("Failed to load events or venues", e);
+      }
+    })();
+  }, []);
 
+  const [formTitle, setFormTitle] = useState("");
   const [formDate, setFormDate] = useState("");
   const [formStartTime, setFormStartTime] = useState("");
   const [formEndTime, setFormEndTime] = useState("");
@@ -126,14 +92,26 @@ const Events = () => {
   const [formAreaChoice, setFormAreaChoice] = useState<VenueArea | "">("");
   const [formMariageInterior, setFormMariageInterior] = useState<"civil" | "coutumier" | "">("");
   const [formMariageExterior, setFormMariageExterior] = useState<"civil" | "coutumier" | "">("");
+  const [formError, setFormError] = useState("");
 
-  const selectedVenue = useMemo(() => venues.find((v) => v.id === formVenue), [formVenue]);
+  const selectedVenue = useMemo(() => venues.find((v) => v.id === formVenue), [formVenue, venues]);
   const selectedVenueArea = selectedVenue?.area;
   const allowedAreas = useMemo(() => {
     if (!selectedVenueArea) return [] as VenueArea[];
     if (selectedVenueArea === "les_deux") return ["interieur", "exterieur", "les_deux"] as VenueArea[];
     return [selectedVenueArea];
   }, [selectedVenueArea]);
+
+  const availableVenues = useMemo(() => {
+    let list = venues.filter((v) => v.status === "vide");
+    if (editingEvent?.venue) {
+      const current = venues.find((v) => v.id === editingEvent.venue);
+      if (current && !list.some((v) => v.id === current.id)) {
+        list = [current, ...list];
+      }
+    }
+    return list;
+  }, [venues, editingEvent]);
 
   useEffect(() => {
     if (allowedAreas.length === 1) {
@@ -171,6 +149,7 @@ const Events = () => {
 
   const openCreateDialog = () => {
     setEditingEvent(null);
+    setFormTitle("");
     setFormDate("");
     setFormStartTime("");
     setFormEndTime("");
@@ -181,14 +160,16 @@ const Events = () => {
     setFormAreaChoice("");
     setFormMariageInterior("");
     setFormMariageExterior("");
+    setFormError("");
     setDialogOpen(true);
   };
 
   const openEditDialog = (event: EventItem) => {
     setEditingEvent(event);
+    setFormTitle(event.title);
     setFormDate(event.date);
-    setFormStartTime(event.startTime ?? "");
-    setFormEndTime(event.endTime ?? "");
+    setFormStartTime(event.startTime ? event.startTime.slice(0,5) : "");
+    setFormEndTime(event.endTime ? event.endTime.slice(0,5) : "");
     setFormCapacity(event.capacity?.toString() ?? "");
     setFormBudget(event.budget);
     setFormVenue(event.venue);
@@ -196,6 +177,7 @@ const Events = () => {
     setFormAreaChoice(event.areaChoice ?? "");
     setFormMariageInterior(event.mariageInteriorSubtype ?? "");
     setFormMariageExterior(event.mariageExteriorSubtype ?? "");
+    setFormError("");
     setDialogOpen(true);
   };
 
@@ -208,15 +190,28 @@ const Events = () => {
     navigate(`/admin/events/${event.id}/manage`);
   };
 
-  const handleDelete = (id: string) => {
-    // simple confirmation côté front
-    if (window.confirm("Supprimer définitivement cet événement ?")) {
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Supprimer définitivement cet événement ?")) return;
+    try {
+      await apiDeleteEvent(id);
       setEvents((prev) => prev.filter((e) => e.id !== id));
+      try {
+        const vs = await fetchVenues();
+        setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+      } catch (e) {
+        console.debug("Skip venues refresh after delete", e);
+      }
+    } catch (e) {
+      console.warn("Failed to delete event", e);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
+    if (!formTitle) {
+      return;
+    }
     if (!formDate) {
       return;
     }
@@ -231,43 +226,58 @@ const Events = () => {
       if ((formAreaChoice === "exterieur" || formAreaChoice === "les_deux") && !formMariageExterior) return;
     }
 
-    const selectedVenueName = venues.find((v) => v.id === formVenue)?.name;
-    const generatedTitle = `${mapEventTypeLabel(formEventType)}`;
-
-    const payload: EventItem = {
-      id: editingEvent ? editingEvent.id : Date.now().toString(),
-      title: editingEvent ? editingEvent.title : generatedTitle || "Événement",
-      date: formDate,
-      startTime: formStartTime || undefined,
-      endTime: formEndTime || undefined,
-      venue: formVenue,
-      guests: editingEvent?.guests ?? (formCapacity ? Number(formCapacity) : 0),
-      capacity: formCapacity ? Number(formCapacity) : undefined,
-      status: editingEvent?.status ?? "en_attente",
-      budget: formBudget,
-      eventType: formEventType || undefined,
-      areaChoice:
-        formEventType && (formEventType === "mariage" || formEventType === "cocktail" || formEventType === "celebration_religieuse")
-          ? ((formAreaChoice as VenueArea) || undefined)
-          : undefined,
-      mariageInteriorSubtype:
-        formEventType === "mariage" && (formAreaChoice === "interieur" || formAreaChoice === "les_deux")
-          ? (formMariageInterior as "civil" | "coutumier")
-          : undefined,
-      mariageExteriorSubtype:
-        formEventType === "mariage" && (formAreaChoice === "exterieur" || formAreaChoice === "les_deux")
-          ? (formMariageExterior as "civil" | "coutumier")
-          : undefined,
-    };
-
-    setEvents((prev) => {
+    try {
       if (editingEvent) {
-        return prev.map((ev) => (ev.id === editingEvent.id ? payload : ev));
+        const updated = await apiUpdateEvent(editingEvent.id, {
+          title: formTitle,
+          date: formDate,
+          startTime: formStartTime || undefined,
+          endTime: formEndTime || undefined,
+          venueId: formVenue || undefined,
+          guests: formCapacity ? Number(formCapacity) : undefined,
+          status: editingEvent.status ?? ("en_attente" as EventStatus),
+          budget: formBudget || undefined,
+          eventType: formEventType || undefined,
+          areaChoice: formAreaChoice || undefined,
+          mariageInteriorSubtype: formMariageInterior || undefined,
+          mariageExteriorSubtype: formMariageExterior || undefined,
+        });
+        setEvents((prev) => prev.map((ev) => (ev.id === editingEvent.id ? (updated as unknown as EventItem) : ev)));
+        try {
+          const vs = await fetchVenues();
+          setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+        } catch (e) {
+          console.debug("Skip venues refresh after update", e);
+        }
+      } else {
+        const created = await apiCreateEvent({
+          title: formTitle,
+          date: formDate,
+          startTime: formStartTime || undefined,
+          endTime: formEndTime || undefined,
+          venueId: formVenue || undefined,
+          guests: formCapacity ? Number(formCapacity) : undefined,
+          status: "en_attente",
+          budget: formBudget || undefined,
+          eventType: formEventType || undefined,
+          areaChoice: formAreaChoice || undefined,
+          mariageInteriorSubtype: formMariageInterior || undefined,
+          mariageExteriorSubtype: formMariageExterior || undefined,
+        });
+        setEvents((prev) => [...prev, created as unknown as EventItem]);
+        try {
+          const vs = await fetchVenues();
+          setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+        } catch (e) {
+          console.debug("Skip venues refresh after create", e);
+        }
       }
-      return [...prev, payload];
-    });
-
-    setDialogOpen(false);
+      setDialogOpen(false);
+    } catch (err) {
+      console.warn("Failed to save event", err);
+      const message = err instanceof Error ? err.message : "Erreur lors de l'enregistrement";
+      setFormError(message);
+    }
   };
 
   const filteredEvents = useMemo(() => {
@@ -322,15 +332,14 @@ const Events = () => {
                 value={statusFilter}
                 onChange={(e) =>
                   setStatusFilter(
-                    e.target.value as "all" | "confirme" | "en_attente" | "termine" | "annule",
+                    e.target.value as "all" | EventStatus,
                   )
                 }
               >
                 <option value="all">Tous les statuts</option>
                 <option value="confirme">Confirmé</option>
                 <option value="en_attente">En attente</option>
-                <option value="annule">Annulé</option>
-                <option value="termine">Terminé</option>
+                <option value="annuler">Annulé</option>
               </select>
             </div>
           </div>
@@ -370,7 +379,7 @@ const Events = () => {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Lieu</span>
-                  <span className="font-medium text-foreground">{event.venue}</span>
+                  <span className="font-medium text-foreground">{venues.find((v) => v.id === event.venue)?.name || event.venue}</span>
                 </div>
                 {event.eventType && (
                   <div className="flex justify-between">
@@ -471,7 +480,7 @@ const Events = () => {
                 )}
                 <div>
                   <span className="font-semibold">Lieu : </span>
-                  <span>{selectedEvent.venue}</span>
+                  <span>{venues.find((v) => v.id === selectedEvent.venue)?.name || selectedEvent.venue}</span>
                 </div>
                 {selectedEvent.eventType && (
                   <div>
@@ -518,14 +527,21 @@ const Events = () => {
                       type="button"
                       variant="outline"
                       className="border-emerald-600 text-emerald-700 hover:bg-emerald-50"
-                      onClick={() => {
+                      onClick={async () => {
                         if (!selectedEvent) return;
-                        setEvents((prev) =>
-                          prev.map((ev) =>
-                            ev.id === selectedEvent.id ? { ...ev, status: "confirme" } : ev,
-                          ),
-                        );
-                        setDetailsDialogOpen(false);
+                        try {
+                          const updated = await apiUpdateEvent(selectedEvent.id, { status: "confirme" });
+                          setEvents((prev) => prev.map((ev) => (ev.id === selectedEvent.id ? (updated as unknown as EventItem) : ev)));
+                          try {
+                            const vs = await fetchVenues();
+                            setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+                          } catch (e) {
+                            console.debug("Skip venues refresh after confirm", e);
+                          }
+                          setDetailsDialogOpen(false);
+                        } catch (e) {
+                          console.warn("Failed to update event status", e);
+                        }
                       }}
                       aria-label="Confirmer l'événement"
                     >
@@ -535,14 +551,21 @@ const Events = () => {
                       type="button"
                       variant="outline"
                       className="border-red-600 text-red-700 hover:bg-red-50"
-                      onClick={() => {
+                      onClick={async () => {
                         if (!selectedEvent) return;
-                        setEvents((prev) =>
-                          prev.map((ev) =>
-                            ev.id === selectedEvent.id ? { ...ev, status: "annule" } : ev,
-                          ),
-                        );
-                        setDetailsDialogOpen(false);
+                        try {
+                          const updated = await apiUpdateEvent(selectedEvent.id, { status: "annuler" });
+                          setEvents((prev) => prev.map((ev) => (ev.id === selectedEvent.id ? (updated as unknown as EventItem) : ev)));
+                          try {
+                            const vs = await fetchVenues();
+                            setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+                          } catch (e) {
+                            console.debug("Skip venues refresh after cancel", e);
+                          }
+                          setDetailsDialogOpen(false);
+                        } catch (e) {
+                          console.warn("Failed to update event status", e);
+                        }
                       }}
                       aria-label="Rejeter l'événement"
                     >
@@ -550,18 +573,20 @@ const Events = () => {
                     </Button>
                   </>
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() => {
-                    if (!selectedEvent) return;
-                    openEditDialog(selectedEvent);
-                    setDetailsDialogOpen(false);
-                  }}
-                >
-                  <Pencil className="w-4 h-4 mr-1" /> 
-                </Button>
+                {selectedEvent.status === "en_attente" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => {
+                      if (!selectedEvent) return;
+                      openEditDialog(selectedEvent);
+                      setDetailsDialogOpen(false);
+                    }}
+                  >
+                    <Pencil className="w-4 h-4 mr-1" /> 
+                  </Button>
+                )}
                 <Button
                   type="button"
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white"
@@ -596,7 +621,22 @@ const Events = () => {
               </DialogTitle>
             </DialogHeader>
 
+            {formError && (
+              <div className="text-sm text-red-600" role="alert">
+                {formError}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Titre de l'événement</label>
+                <Input
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder="Ex: Mariage de Paul & Sarah"
+                  required
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Date</label>
                 <Input
@@ -672,7 +712,7 @@ const Events = () => {
                   }}
                 >
                   <option value="">Choisir une salle...</option>
-                  {venues.map((venue) => (
+                  {availableVenues.map((venue) => (
                     <option key={venue.id} value={venue.id}>
                       {venue.name}
                     </option>
