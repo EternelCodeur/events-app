@@ -38,13 +38,10 @@ class VenueController extends Controller
             abort(422, 'Entreprise non définie');
         }
 
-        // Prevent duplicate venue (same core information within entreprise)
+        // Prevent duplicate by name within entreprise (case-insensitive)
         $dupExists = Venue::query()
             ->where('entreprise_id', $entrepriseId)
-            ->where('name', $data['name'])
-            ->where('location', $data['location'])
-            ->where('area', $data['area'])
-            ->where('capacity', $data['capacity'])
+            ->whereRaw('LOWER(name) = ?', [strtolower($data['name'])])
             ->exists();
         if ($dupExists) {
             abort(422, 'Cette salle existe déjà');
@@ -87,18 +84,12 @@ class VenueController extends Controller
 
         // Compute new values without persisting yet
         $newName = array_key_exists('name', $data) ? $data['name'] : $venue->name;
-        $newCapacity = array_key_exists('capacity', $data) ? $data['capacity'] : $venue->capacity;
-        $newLocation = array_key_exists('location', $data) ? $data['location'] : $venue->location;
-        $newArea = array_key_exists('area', $data) ? $data['area'] : $venue->area;
 
-        // Prevent duplicate with final values
+        // Prevent duplicate by name (case-insensitive) within entreprise
         $dupExists = Venue::query()
             ->where('entreprise_id', $venue->entreprise_id)
             ->where('id', '<>', $venue->id)
-            ->where('name', $newName)
-            ->where('location', $newLocation)
-            ->where('area', $newArea)
-            ->where('capacity', $newCapacity)
+            ->whereRaw('LOWER(name) = ?', [strtolower($newName)])
             ->exists();
         if ($dupExists) {
             abort(422, 'Cette salle existe déjà');

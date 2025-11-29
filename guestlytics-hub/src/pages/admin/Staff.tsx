@@ -12,38 +12,22 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  getStaff as fetchStaff,
+  createStaff as apiCreateStaff,
+  updateStaff as apiUpdateStaff,
+  deleteStaff as apiDeleteStaff,
+} from "@/lib/staff";
 
 interface StaffMember {
   id: string;
   name: string;
   role: string;
   status: "active" | "inactive";
-  phone: string;
+  phone?: string;
 }
 
-const initialStaff: StaffMember[] = [
-  {
-    id: "1",
-    name: "Marie Dubois",
-    role: "Hôtesse",
-    status: "active",
-    phone: "+33 6 12 34 56 78",
-  },
-  {
-    id: "2",
-    name: "Jean Martin",
-    role: "Serveur",
-    status: "active",
-    phone: "+33 6 23 45 67 89",
-  },
-  {
-    id: "3",
-    name: "Sophie Bernard",
-    role: "Chef de salle",
-    status: "inactive",
-    phone: "+33 6 34 56 78 90",
-  },
-];
+const initialStaff: StaffMember[] = [];
 
 const Staff = () => {
   const [staffList, setStaffList] = useState<StaffMember[]>(initialStaff);
@@ -52,6 +36,8 @@ const Staff = () => {
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
 
   const [formName, setFormName] = useState("");
+  const [formPhone, setFormPhone] = useState("");
+  const [formError, setFormError] = useState("");
   const roles = [
     "Superviseur",
     "Maître d'hôtel",
@@ -65,6 +51,17 @@ const Staff = () => {
   const [selectedRole, setSelectedRole] = useState<string>(roles[0]);
   const [customRole, setCustomRole] = useState("");
 
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const data = await fetchStaff();
+        setStaffList(data as unknown as StaffMember[]);
+      } catch (e) {
+        console.warn("Failed to fetch staff", e);
+      }
+    })();
+  }, []);
+
   const filteredStaff = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return staffList;
@@ -77,14 +74,17 @@ const Staff = () => {
   const openCreateDialog = () => {
     setEditingStaff(null);
     setFormName("");
+    setFormPhone("");
     setSelectedRole(roles[0]);
     setCustomRole("");
+    setFormError("");
     setDialogOpen(true);
   };
 
   const openEditDialog = (member: StaffMember) => {
     setEditingStaff(member);
     setFormName(member.name);
+    setFormPhone(member.phone || "");
     if (roles.includes(member.role)) {
       setSelectedRole(member.role);
       setCustomRole("");
@@ -92,36 +92,49 @@ const Staff = () => {
       setSelectedRole("Autres");
       setCustomRole(member.role);
     }
+    setFormError("");
     setDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Supprimer définitivement ce membre du personnel ?")) {
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Supprimer définitivement ce membre du personnel ?")) return;
+    try {
+      await apiDeleteStaff(id);
       setStaffList((prev) => prev.filter((m) => m.id !== id));
+    } catch (e) {
+      console.warn("Failed to delete staff", e);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     const finalRole = selectedRole === "Autres" ? customRole.trim() : selectedRole;
     if (!formName || !finalRole) return;
 
-    const payload: StaffMember = {
-      id: editingStaff ? editingStaff.id : Date.now().toString(),
-      name: formName,
-      role: finalRole,
-      status: editingStaff?.status ?? "active",
-      phone: editingStaff?.phone ?? "",
-    };
-
-    setStaffList((prev) => {
+    try {
       if (editingStaff) {
-        return prev.map((m) => (m.id === editingStaff.id ? payload : m));
+        const updated = await apiUpdateStaff(editingStaff.id, {
+          name: formName,
+          role: finalRole,
+          phone: formPhone || undefined,
+        });
+        setStaffList((prev) => prev.map((m) => (m.id === editingStaff.id ? (updated as unknown as StaffMember) : m)));
+      } else {
+        const created = await apiCreateStaff({
+          name: formName,
+          role: finalRole,
+          phone: formPhone || undefined,
+          status: "inactive",
+        });
+        setStaffList((prev) => [...prev, created as unknown as StaffMember]);
       }
-      return [...prev, payload];
-    });
-
-    setDialogOpen(false);
+      setDialogOpen(false);
+    } catch (err) {
+      console.warn("Failed to save staff", err);
+      const message = err instanceof Error ? err.message : "Erreur lors de l'enregistrement";
+      setFormError(message);
+    }
   };
 
   return (
@@ -234,6 +247,12 @@ const Staff = () => {
               </DialogTitle>
             </DialogHeader>
 
+            {formError && (
+              <div className="text-sm text-red-600" role="alert">
+                {formError}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium mb-1">Nom du membre</label>
@@ -241,6 +260,15 @@ const Staff = () => {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="Nom et prénom"
+                  required
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1">Téléphone</label>
+                <Input
+                  value={formPhone}
+                  onChange={(e) => setFormPhone(e.target.value)}
+                  placeholder="Ex: +33 6 12 34 56 78"
                   required
                 />
               </div>

@@ -74,29 +74,12 @@ class EventController extends Controller
             }
         }
 
-        // Prevent duplicate event (same core information)
-        $dupQuery = Event::query()
-            ->where('entreprise_id', $entrepriseId)
-            ->where('title', $data['title'])
-            ->whereDate('date', $data['date']);
-        $dupPairs = [
-            'venue_id' => $data['venueId'] ?? null,
-            'start_time' => $data['startTime'] ?? null,
-            'end_time' => $data['endTime'] ?? null,
-            'event_type' => $data['eventType'] ?? null,
-            'area_choice' => $data['areaChoice'] ?? null,
-            'mariage_interior_subtype' => $data['mariageInteriorSubtype'] ?? null,
-            'mariage_exterior_subtype' => $data['mariageExteriorSubtype'] ?? null,
-        ];
-        foreach ($dupPairs as $col => $val) {
-            if ($val !== null && $val !== '') {
-                $dupQuery->where($col, $val);
-            } else {
-                $dupQuery->whereNull($col);
-            }
-        }
-        if ($dupQuery->exists()) {
-            abort(422, 'Cet évènement existe déjà');
+        // Prevent duplicate by title within entreprise (case-insensitive)
+        $dupExists = Event::where('entreprise_id', $entrepriseId)
+            ->whereRaw('LOWER(title) = ?', [strtolower($data['title'])])
+            ->exists();
+        if ($dupExists) {
+            abort(422, 'Cet événement existe déjà');
         }
 
         $event = Event::create([
@@ -204,30 +187,13 @@ class EventController extends Controller
         if (array_key_exists('mariageExteriorSubtype', $data)) $event->mariage_exterior_subtype = $data['mariageExteriorSubtype'];
         if (array_key_exists('status', $data)) $event->status = $data['status'];
 
-        // Prevent duplicate on update (using final values to be saved)
-        $dupQuery = Event::query()
-            ->where('entreprise_id', $event->entreprise_id)
+        // Prevent duplicate by title (case-insensitive) within entreprise on update
+        $dupExists = Event::where('entreprise_id', $event->entreprise_id)
             ->where('id', '<>', $event->id)
-            ->where('title', $event->title)
-            ->whereDate('date', $event->date);
-        $dupPairs = [
-            'venue_id' => $event->venue_id,
-            'start_time' => $event->start_time,
-            'end_time' => $event->end_time,
-            'event_type' => $event->event_type,
-            'area_choice' => $event->area_choice,
-            'mariage_interior_subtype' => $event->mariage_interior_subtype,
-            'mariage_exterior_subtype' => $event->mariage_exterior_subtype,
-        ];
-        foreach ($dupPairs as $col => $val) {
-            if ($val !== null && $val !== '') {
-                $dupQuery->where($col, $val);
-            } else {
-                $dupQuery->whereNull($col);
-            }
-        }
-        if ($dupQuery->exists()) {
-            abort(422, 'Cet évènement existe déjà');
+            ->whereRaw('LOWER(title) = ?', [strtolower($event->title)])
+            ->exists();
+        if ($dupExists) {
+            abort(422, 'Cet événement existe déjà');
         }
 
         $event->save();

@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\EntrepriseController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\VenueController;
 use App\Http\Controllers\Api\EventController;
+use App\Http\Controllers\Api\StaffController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -22,4 +23,5 @@ Route::middleware(['jwt', 'role:superadmin'])->group(function () {
 Route::middleware(['jwt', 'role:admin'])->group(function () {
     Route::apiResource('venues', VenueController::class);
     Route::apiResource('events', EventController::class);
+    Route::apiResource('staff', StaffController::class);
 });
