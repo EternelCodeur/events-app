@@ -103,7 +103,34 @@ const Events = () => {
   }, [selectedVenueArea]);
 
   const availableVenues = useMemo(() => {
-    let list = venues.filter((v) => v.status === "vide");
+    let list = venues;
+    if (formDate) {
+      const s = formStartTime;
+      const e = formEndTime;
+      const occupied = new Set(
+        events
+          .filter(
+            (ev) =>
+              ev.date === formDate &&
+              (ev.status === "en_attente" || ev.status === "confirme") &&
+              (!editingEvent || ev.id !== editingEvent.id),
+          )
+          .filter((ev) => {
+            const es = ev.startTime || "";
+            const ee = ev.endTime || "";
+            if (s && e) {
+              // existing all-day (missing times) or overlapping intervals
+              if (!es || !ee) return true;
+              return es < e && ee > s;
+            }
+            // if no times selected, only conflict with all-day existing events
+            return !es || !ee;
+          })
+          .map((ev) => ev.venue),
+      );
+      list = venues.filter((v) => !occupied.has(v.id));
+    }
+    // Always keep the currently assigned venue when editing
     if (editingEvent?.venue) {
       const current = venues.find((v) => v.id === editingEvent.venue);
       if (current && !list.some((v) => v.id === current.id)) {
@@ -111,7 +138,7 @@ const Events = () => {
       }
     }
     return list;
-  }, [venues, editingEvent]);
+  }, [venues, events, formDate, formStartTime, formEndTime, editingEvent]);
 
   useEffect(() => {
     if (allowedAreas.length === 1) {

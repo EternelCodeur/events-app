@@ -6,6 +6,8 @@ export type AuthUser = {
   name: string;
   email: string;
   role: "superadmin" | "admin" | "hotesse" | "utilisateur";
+  entrepriseId?: string;
+  entrepriseName?: string;
 };
 
 let currentUser: AuthUser | null = null;
@@ -66,6 +68,8 @@ export async function login(
     name: (data.user as Record<string, unknown>)?.name as string ?? "Utilisateur",
     email: (data.user as Record<string, unknown>)?.email as string ?? email,
     role: ((data.user as Record<string, unknown>)?.role as AuthUser["role"]) ?? ("admin" as const),
+    entrepriseId: (data.user as Record<string, unknown>)?.entrepriseId as string | undefined,
+    entrepriseName: (data.user as Record<string, unknown>)?.entrepriseName as string | undefined,
   };
   persistAuth(user, data.access_token, remember);
   return user;
@@ -114,6 +118,8 @@ export async function getMe(): Promise<AuthUser | null> {
       name: (u?.name as string | undefined) ?? "Utilisateur",
       email: (u?.email as string | undefined) ?? "",
       role: (u?.role as AuthUser["role"]) ?? ("admin" as const),
+      entrepriseId: u?.entrepriseId as string | undefined,
+      entrepriseName: u?.entrepriseName as string | undefined,
     };
     currentUser = user;
     try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch { /* empty */ }

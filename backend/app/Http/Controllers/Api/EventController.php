@@ -72,6 +72,32 @@ class EventController extends Controller
             if (!$venue || (int) $venue->entreprise_id !== (int) $entrepriseId) {
                 abort(422, 'La salle sélectionnée ne correspond pas à votre entreprise');
             }
+            // Conflict: same venue already booked on the same date & overlapping time slot
+            $start = $data['startTime'] ?? null;
+            $end = $data['endTime'] ?? null;
+            $conflictQuery = Event::where('venue_id', $data['venueId'])
+                ->whereDate('date', $data['date'])
+                ->whereIn('status', ['en_attente', 'confirme']);
+            if ($start && $end) {
+                $conflictQuery->where(function ($q) use ($start, $end) {
+                    // existing all-day OR overlapping intervals (start < existing.end AND existing.start < end)
+                    $q->whereNull('start_time')
+                      ->orWhereNull('end_time')
+                      ->orWhere(function ($qq) use ($start, $end) {
+                          $qq->where('start_time', '<', $end)
+                             ->where('end_time', '>', $start);
+                      });
+                });
+            } else {
+                // if no start/end provided, only conflicting with all-day events on that date
+                $conflictQuery->where(function ($q) {
+                    $q->whereNull('start_time')->orWhereNull('end_time');
+                });
+            }
+            $conflict = $conflictQuery->exists();
+            if ($conflict) {
+                abort(422, 'La salle est déjà occupée à cette date');
+            }
         }
 
         // Prevent duplicate by title within entreprise (case-insensitive)
@@ -107,13 +133,35 @@ class EventController extends Controller
         $event->folder_path = 'entreprises/' . $slug . '/events/' . $event->title;
         $event->save();
 
-        // Update venue status according to assigned events
+        // Update venue status according to assigned events (time-aware)
         if ($event->venue_id) {
             $venue = Venue::find($event->venue_id);
             if ($venue) {
-                $hasConfirme = Event::where('venue_id', $venue->id)->where('status', 'confirme')->exists();
-                $hasAttente = Event::where('venue_id', $venue->id)->where('status', 'en_attente')->exists();
-                $venue->status = $hasConfirme ? 'occupe' : ($hasAttente ? 'en_attente' : 'vide');
+                $today = date('Y-m-d');
+                $now = date('H:i');
+                $nowConfirmed = Event::where('venue_id', $venue->id)
+                    ->where('status', 'confirme')
+                    ->whereDate('date', '=', $today)
+                    ->where(function ($q) use ($now) {
+                        $q->whereNull('start_time')->orWhere('start_time', '<=', $now);
+                    })
+                    ->where(function ($q) use ($now) {
+                        $q->whereNull('end_time')->orWhere('end_time', '>', $now);
+                    })
+                    ->exists();
+                $hasUpcoming = Event::where('venue_id', $venue->id)
+                    ->whereIn('status', ['en_attente', 'confirme'])
+                    ->where(function ($q) use ($today, $now) {
+                        $q->where('date', '>', $today)
+                          ->orWhere(function ($qq) use ($today, $now) {
+                              $qq->where('date', '=', $today)
+                                 ->where(function ($qq2) use ($now) {
+                                     $qq2->whereNull('start_time')->orWhere('start_time', '>', $now);
+                                 });
+                          });
+                    })
+                    ->exists();
+                $venue->status = $nowConfirmed ? 'occupe' : ($hasUpcoming ? 'en_attente' : 'vide');
                 $venue->save();
             }
         }
@@ -187,6 +235,34 @@ class EventController extends Controller
         if (array_key_exists('mariageExteriorSubtype', $data)) $event->mariage_exterior_subtype = $data['mariageExteriorSubtype'];
         if (array_key_exists('status', $data)) $event->status = $data['status'];
 
+        // Conflict check after applying changes (exclude current event)
+        if ($event->venue_id && $event->date) {
+            $conflictQuery = Event::where('venue_id', $event->venue_id)
+                ->whereDate('date', $event->date)
+                ->whereIn('status', ['en_attente', 'confirme'])
+                ->where('id', '<>', $event->id);
+            $start = $event->start_time;
+            $end = $event->end_time;
+            if ($start && $end) {
+                $conflictQuery->where(function ($q) use ($start, $end) {
+                    $q->whereNull('start_time')
+                      ->orWhereNull('end_time')
+                      ->orWhere(function ($qq) use ($start, $end) {
+                          $qq->where('start_time', '<', $end)
+                             ->where('end_time', '>', $start);
+                      });
+                });
+            } else {
+                $conflictQuery->where(function ($q) {
+                    $q->whereNull('start_time')->orWhereNull('end_time');
+                });
+            }
+            $conflict = $conflictQuery->exists();
+            if ($conflict) {
+                abort(422, 'La salle est déjà occupée à cette date');
+            }
+        }
+
         // Prevent duplicate by title (case-insensitive) within entreprise on update
         $dupExists = Event::where('entreprise_id', $event->entreprise_id)
             ->where('id', '<>', $event->id)
@@ -216,15 +292,37 @@ class EventController extends Controller
             $event->save();
         }
 
-        // Recalculate venue statuses if venue/status changed
+        // Recalculate venue statuses if venue/status changed (time-aware)
         if ($oldVenueId !== $event->venue_id || $oldStatus !== $event->status) {
             // New/current venue
             if ($event->venue_id) {
                 $venue = Venue::find($event->venue_id);
                 if ($venue) {
-                    $hasConfirme = Event::where('venue_id', $venue->id)->where('status', 'confirme')->exists();
-                    $hasAttente = Event::where('venue_id', $venue->id)->where('status', 'en_attente')->exists();
-                    $venue->status = $hasConfirme ? 'occupe' : ($hasAttente ? 'en_attente' : 'vide');
+                    $today = date('Y-m-d');
+                    $now = date('H:i');
+                    $nowConfirmed = Event::where('venue_id', $venue->id)
+                        ->where('status', 'confirme')
+                        ->whereDate('date', '=', $today)
+                        ->where(function ($q) use ($now) {
+                            $q->whereNull('start_time')->orWhere('start_time', '<=', $now);
+                        })
+                        ->where(function ($q) use ($now) {
+                            $q->whereNull('end_time')->orWhere('end_time', '>', $now);
+                        })
+                        ->exists();
+                    $hasUpcoming = Event::where('venue_id', $venue->id)
+                        ->whereIn('status', ['en_attente', 'confirme'])
+                        ->where(function ($q) use ($today, $now) {
+                            $q->where('date', '>', $today)
+                              ->orWhere(function ($qq) use ($today, $now) {
+                                  $qq->where('date', '=', $today)
+                                     ->where(function ($qq2) use ($now) {
+                                         $qq2->whereNull('start_time')->orWhere('start_time', '>', $now);
+                                     });
+                              });
+                        })
+                        ->exists();
+                    $venue->status = $nowConfirmed ? 'occupe' : ($hasUpcoming ? 'en_attente' : 'vide');
                     $venue->save();
                 }
             }
@@ -232,9 +330,31 @@ class EventController extends Controller
             if ($oldVenueId && $oldVenueId !== $event->venue_id) {
                 $oldVenue = Venue::find($oldVenueId);
                 if ($oldVenue) {
-                    $hasConfirme = Event::where('venue_id', $oldVenue->id)->where('status', 'confirme')->exists();
-                    $hasAttente = Event::where('venue_id', $oldVenue->id)->where('status', 'en_attente')->exists();
-                    $oldVenue->status = $hasConfirme ? 'occupe' : ($hasAttente ? 'en_attente' : 'vide');
+                    $today = date('Y-m-d');
+                    $now = date('H:i');
+                    $nowConfirmed = Event::where('venue_id', $oldVenue->id)
+                        ->where('status', 'confirme')
+                        ->whereDate('date', '=', $today)
+                        ->where(function ($q) use ($now) {
+                            $q->whereNull('start_time')->orWhere('start_time', '<=', $now);
+                        })
+                        ->where(function ($q) use ($now) {
+                            $q->whereNull('end_time')->orWhere('end_time', '>', $now);
+                        })
+                        ->exists();
+                    $hasUpcoming = Event::where('venue_id', $oldVenue->id)
+                        ->whereIn('status', ['en_attente', 'confirme'])
+                        ->where(function ($q) use ($today, $now) {
+                            $q->where('date', '>', $today)
+                              ->orWhere(function ($qq) use ($today, $now) {
+                                  $qq->where('date', '=', $today)
+                                     ->where(function ($qq2) use ($now) {
+                                         $qq2->whereNull('start_time')->orWhere('start_time', '>', $now);
+                                     });
+                              });
+                        })
+                        ->exists();
+                    $oldVenue->status = $nowConfirmed ? 'occupe' : ($hasUpcoming ? 'en_attente' : 'vide');
                     $oldVenue->save();
                 }
             }
@@ -256,15 +376,37 @@ class EventController extends Controller
         Storage::disk('local')->deleteDirectory($base . $event->title);
         Storage::disk('local')->deleteDirectory($base . $event->id);
 
-        // Recalculate venue status after deletion
+        // Recalculate venue status after deletion (time-aware)
         $venueId = $event->venue_id;
         $event->delete();
         if ($venueId) {
             $venue = Venue::find($venueId);
             if ($venue) {
-                $hasConfirme = Event::where('venue_id', $venue->id)->where('status', 'confirme')->exists();
-                $hasAttente = Event::where('venue_id', $venue->id)->where('status', 'en_attente')->exists();
-                $venue->status = $hasConfirme ? 'occupe' : ($hasAttente ? 'en_attente' : 'vide');
+                $today = date('Y-m-d');
+                $now = date('H:i');
+                $nowConfirmed = Event::where('venue_id', $venue->id)
+                    ->where('status', 'confirme')
+                    ->whereDate('date', '=', $today)
+                    ->where(function ($q) use ($now) {
+                        $q->whereNull('start_time')->orWhere('start_time', '<=', $now);
+                    })
+                    ->where(function ($q) use ($now) {
+                        $q->whereNull('end_time')->orWhere('end_time', '>', $now);
+                    })
+                    ->exists();
+                $hasUpcoming = Event::where('venue_id', $venue->id)
+                    ->whereIn('status', ['en_attente', 'confirme'])
+                    ->where(function ($q) use ($today, $now) {
+                        $q->where('date', '>', $today)
+                          ->orWhere(function ($qq) use ($today, $now) {
+                              $qq->where('date', '=', $today)
+                                 ->where(function ($qq2) use ($now) {
+                                     $qq2->whereNull('start_time')->orWhere('start_time', '>', $now);
+                                 });
+                          });
+                    })
+                    ->exists();
+                $venue->status = $nowConfirmed ? 'occupe' : ($hasUpcoming ? 'en_attente' : 'vide');
                 $venue->save();
             }
         }

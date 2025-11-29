@@ -32,16 +32,14 @@ interface AppLayoutProps {
 }
 
 export const AppLayout = ({ children }: AppLayoutProps) => {
-  const { role } = useUser();
+  const { role, user } = useUser();
   const navigate = useNavigate();
   const location = useLocation();
 
   const headerTitle =
     role === "superadmin"
       ? "EventPro"
-      : role === "hotesse"
-      ? "Nom de l'événement"
-      : "Nom de l'entreprise";
+      : user?.entrepriseName ?? "Nom de l'entreprise";
 
   const adminTabs = [
     {

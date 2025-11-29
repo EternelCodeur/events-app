@@ -40,7 +40,9 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        return response()->json($request->user());
+        /** @var User $u */
+        $u = $request->user();
+        return response()->json($this->transformUser($u));
     }
 
     public function logout()
@@ -66,8 +68,33 @@ class AuthController extends Controller
             'access_token' => $token,
             'token_type' => 'bearer',
             'expires_in' => $ttlSeconds,
-            'user' => $user,
+            'user' => $this->transformUser($user),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function transformUser(User $user): array
+    {
+        $entrepriseName = null;
+        $entrepriseId = null;
+        $role = (string) ($user->role ?? 'admin');
+        if (in_array($role, ['admin', 'hotesse', 'utilisateur'], true) && $user->entreprise_id) {
+            $entreprise = Entreprise::find($user->entreprise_id);
+            if ($entreprise) {
+                $entrepriseName = (string) $entreprise->name;
+                $entrepriseId = (string) $entreprise->id;
+            }
+        }
+        return [
+            'id' => (string) $user->id,
+            'name' => (string) ($user->name ?? ''),
+            'email' => (string) ($user->email ?? ''),
+            'role' => $role,
+            'entrepriseId' => $entrepriseId,
+            'entrepriseName' => $entrepriseName,
+        ];
     }
 
     private function issueToken(int|string $userId, ?string $role = null): string

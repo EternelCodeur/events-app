@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VenueResource;
 use App\Models\Venue;
+use App\Models\Event;
 use Illuminate\Http\Request;
 
 class VenueController extends Controller
@@ -16,7 +17,42 @@ class VenueController extends Controller
         if (($user->role ?? 'admin') !== 'superadmin') {
             $query->where('entreprise_id', $user->entreprise_id);
         }
-        return VenueResource::collection($query->latest()->get());
+        $venues = $query->latest()->get();
+
+        // Time-aware status recalculation so rooms auto switch when events pass
+        $today = date('Y-m-d');
+        $now = date('H:i');
+        foreach ($venues as $venue) {
+            $nowConfirmed = Event::where('venue_id', $venue->id)
+                ->where('status', 'confirme')
+                ->whereDate('date', '=', $today)
+                ->where(function ($q) use ($now) {
+                    $q->whereNull('start_time')->orWhere('start_time', '<=', $now);
+                })
+                ->where(function ($q) use ($now) {
+                    $q->whereNull('end_time')->orWhere('end_time', '>', $now);
+                })
+                ->exists();
+            $hasUpcoming = Event::where('venue_id', $venue->id)
+                ->whereIn('status', ['en_attente', 'confirme'])
+                ->where(function ($q) use ($today, $now) {
+                    $q->where('date', '>', $today)
+                      ->orWhere(function ($qq) use ($today, $now) {
+                          $qq->where('date', '=', $today)
+                             ->where(function ($qq2) use ($now) {
+                                 $qq2->whereNull('start_time')->orWhere('start_time', '>', $now);
+                             });
+                      });
+                })
+                ->exists();
+            $newStatus = $nowConfirmed ? 'occupe' : ($hasUpcoming ? 'en_attente' : 'vide');
+            if ($venue->status !== $newStatus) {
+                $venue->status = $newStatus;
+                $venue->save();
+            }
+        }
+
+        return VenueResource::collection($venues);
     }
 
     public function store(Request $request)
