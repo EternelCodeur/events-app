@@ -39,6 +39,7 @@ const EventManagement = () => {
   const [provComments, setProvComments] = useState("");
   const [provContact, setProvContact] = useState("");
   const [provError, setProvError] = useState("");
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // Tasks (Réaménagement)
   const [tasks, setTasks] = useState<EventTask[]>([]);
@@ -112,7 +113,158 @@ const EventManagement = () => {
     setProvComments("");
     setProvContact("");
     setProvError("");
-    setProvDialogOpen(true);
+  };
+
+  const fetchAllProvidersForPrint = async () => {
+    if (!id) return { items: [] as ProviderItem[], totals: { amountCfa: 0, advanceCfa: 0, restCfa: 0 } };
+    let page = 1;
+    let last = 1;
+    const all: ProviderItem[] = [];
+    let totals = { amountCfa: 0, advanceCfa: 0, restCfa: 0 };
+    do {
+      const pageData = await getProvidersPage(id, page, 100);
+      all.push(...(pageData.items as ProviderItem[]));
+      totals = pageData.totals;
+      last = pageData.lastPage;
+      page += 1;
+    } while (page <= last);
+    return { items: all, totals };
+  };
+
+  const printProviders = async (mode: "page" | "all", fitOnePage: boolean) => {
+    try {
+      setIsPrinting(true);
+      const data = mode === "page"
+        ? { items: providers, totals: providersTotals }
+        : await fetchAllProvidersForPrint();
+      const formatCfa = (n: number) => `${new Intl.NumberFormat("fr-FR").format(Number(n || 0))} CFA`;
+      const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const rowsHtml = data.items.map(p => `
+        <tr>
+          <td>${esc(p.type || "-")}</td>
+          <td>${esc(p.designation)}</td>
+          <td class="num">${formatCfa(p.amountCfa || 0)}</td>
+          <td class="num">${formatCfa(p.advanceCfa || 0)}</td>
+          <td class="num">${formatCfa(Math.max((p.amountCfa || 0) - (p.advanceCfa || 0), 0))}</td>
+          <td>${esc(p.comments || "-")}</td>
+          <td>${esc(p.contact || "-")}</td>
+        </tr>
+      `).join("");
+      const title = esc(eventData?.title || "Événement");
+      const date = esc(eventData?.date || "");
+      const html = `<!doctype html>
+        <html lang="fr">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Prestataires</title>
+            <style>
+              @page { size: A4; margin: 12mm; }
+              * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color: #111827; }
+              h1 { font-size: 18px; margin: 0 0 8px 0; }
+              .meta { color: #6B7280; font-size: 12px; margin-bottom: 12px; }
+              table { width: 100%; border-collapse: collapse; font-size: 12px; }
+              thead th { background: #E5E7EB; text-align: center; padding: 8px 6px; border: 1px solid #E5E7EB; }
+              tbody td { padding: 8px 6px; border: 1px solid #E5E7EB; }
+              tfoot td { padding: 8px 6px; border: 1px solid #E5E7EB; }
+              tfoot tr.total { background: #1E3A8A; color: #fff; }
+              td.num { text-align: center; white-space: nowrap; }
+              td.center { text-align: center; }
+              .fit table { font-size: 10px; }
+              .fit thead th, .fit tbody td, .fit tfoot td { padding: 4px 4px; }
+              .fit h1 { font-size: 14px; }
+              .fit .meta { font-size: 10px; }
+            </style>
+          </head>
+          <body class="${fitOnePage ? "fit" : ""}">
+            <h1>${title ? `${title}` : ""}</h1>
+            <h1>Listes des prestataires</h1>
+            ${date ? `<div class="meta">Date: ${date}</div>` : ""}
+            <table>
+              <thead>
+                <tr>
+                  <th>Types</th>
+                  <th>Désignation</th>
+                  <th>Montant</th>
+                  <th>Avance</th>
+                  <th>Reste à payer</th>
+                  <th>Commentaires</th>
+                  <th>Contact</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml || `<tr><td class="center" colspan="7">Aucun prestataire</td></tr>`}
+              </tbody>
+              <tfoot>
+                <tr class="total">
+                  <td colspan="2" style="text-align:right;font-weight:600;">Total</td>
+                  <td class="num" style="font-weight:600;">${formatCfa(data.totals.amountCfa)}</td>
+                  <td class="num" style="font-weight:600;">${formatCfa(data.totals.advanceCfa)}</td>
+                  <td class="num" style="font-weight:600;">${formatCfa(data.totals.restCfa)}</td>
+                  <td colspan="2"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </body>
+        </html>`;
+      const w = window.open("", "_blank");
+      if (!w) { setIsPrinting(false); return; }
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      setTimeout(() => { w.print(); setIsPrinting(false); }, 300);
+    } catch {
+      setIsPrinting(false);
+    }
+  };
+
+  const exportProvidersExcel = async (mode: "page" | "all") => {
+    const data = mode === "page" ? { items: providers, totals: providersTotals } : await fetchAllProvidersForPrint();
+    const formatCfa = (n: number) => `${new Intl.NumberFormat("fr-FR").format(Number(n || 0))} CFA`;
+    const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rowsHtml = data.items.map(p => `
+      <tr>
+        <td>${esc(p.type || "-")}</td>
+        <td>${esc(p.designation)}</td>
+        <td style="text-align:center;">${formatCfa(p.amountCfa || 0)}</td>
+        <td style="text-align:center;">${formatCfa(p.advanceCfa || 0)}</td>
+        <td style="text-align:center;">${formatCfa(Math.max((p.amountCfa || 0) - (p.advanceCfa || 0), 0))}</td>
+        <td>${esc(p.comments || "-")}</td>
+        <td>${esc(p.contact || "-")}</td>
+      </tr>
+    `).join("");
+    const excelHtml = `<!doctype html>
+      <html><head><meta charset="UTF-8"><style>
+      table{width:100%;border-collapse:collapse;font-size:12px;}
+      th{background:#E5E7EB;text-align:center;padding:8px 6px;border:1px solid #E5E7EB;}
+      td{padding:8px 6px;border:1px solid #E5E7EB;}
+      tfoot td{border:1px solid #E5E7EB;}
+      tr.total{background:#1E3A8A;color:#fff;}
+      </style></head><body>
+      <table>
+        <thead><tr>
+          <th>Types</th><th>Désignation</th><th>Montant</th><th>Avance</th><th>Reste à payer</th><th>Commentaires</th><th>Contact</th>
+        </tr></thead>
+        <tbody>${rowsHtml || `<tr><td colspan="7" style="text-align:center;">Aucun prestataire</td></tr>`}</tbody>
+        <tfoot><tr class="total">
+          <td colspan="2" style="text-align:right;font-weight:600;">Total</td>
+          <td style="text-align:center;font-weight:600;">${formatCfa(data.totals.amountCfa)}</td>
+          <td style="text-align:center;font-weight:600;">${formatCfa(data.totals.advanceCfa)}</td>
+          <td style="text-align:center;font-weight:600;">${formatCfa(data.totals.restCfa)}</td>
+          <td colspan="2"></td>
+        </tr></tfoot>
+      </table></body></html>`;
+    const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "prestataires.xls";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const openEditProvider = (p: ProviderItem) => {
@@ -124,7 +276,6 @@ const EventManagement = () => {
     setProvComments(p.comments || "");
     setProvContact(p.contact || "");
     setProvError("");
-    setProvDialogOpen(true);
   };
 
   const saveProvider = async () => {
@@ -157,7 +308,6 @@ const EventManagement = () => {
         setProvidersTotal(pageData.total);
         setProvidersTotals(pageData.totals);
       }
-      setProvDialogOpen(false);
     } catch (e) {
       setProvError(((e as unknown) as { message?: string })?.message ?? "Erreur inconnue");
     }
@@ -413,9 +563,11 @@ const EventManagement = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-foreground">Prestataires</h2>
-                <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={openCreateProvider}>
-                  <Plus className="w-4 h-4 mr-1" /> Ajouter
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => printProviders("all", true)} disabled={isPrinting}>PDF</Button>
+                  <Button type="button" variant="outline" onClick={() => exportProvidersExcel("all")}>Excel</Button>
+                  <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={openCreateProvider}>Ajouter</Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -442,7 +594,7 @@ const EventManagement = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left border-b border-border">
+                    <tr className="text-left bg-gray-200 border-b border-border">
                       <th className="py-2 pr-2 text-center">Types</th>
                       <th className="py-2 pr-2 text-center">Désignation</th>
                       <th className="py-2 pr-2 text-center">Montant</th>
@@ -461,7 +613,7 @@ const EventManagement = () => {
                         <td className="py-2 pr-2 text-center">{(p.amountCfa || 0).toLocaleString("fr-FR")} CFA</td>
                         <td className="py-2 pr-2 text-center">{(p.advanceCfa || 0).toLocaleString("fr-FR")} CFA</td>
                         <td className="py-2 pr-2 text-center">{(p.restToPayCfa || 0).toLocaleString("fr-FR")} CFA</td>
-                        <td className="py-2 pr-2 max-w-[260px] truncate" title={p.comments || undefined}>{p.comments || "-"}</td>
+                        <td className="py-2 pr-2 text-center max-w-[260px] truncate" title={p.comments || undefined}>{p.comments || "-"}</td>
                         <td className="py-2 pr-2 text-center">{p.contact || "-"}</td>
                         <td className="py-2 pr-2">
                           <div className="flex items-center gap-2">
@@ -588,6 +740,7 @@ const EventManagement = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 };
