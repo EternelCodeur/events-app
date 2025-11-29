@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Search } from "lucide-react";
+import { getTasks, type EventTask } from "@/lib/tasks";
 
 const mockEvents = [
   { id: "1", title: "Mariage Dupont" },
@@ -51,6 +52,7 @@ const EventStaff = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const [tasks, setTasks] = useState<EventTask[]>([]);
 
   const event = mockEvents.find((e) => e.id === id);
 
@@ -62,6 +64,8 @@ const EventStaff = () => {
 
   const task = useMemo(() => new URLSearchParams(location.search).get("task") || "", [location.search]);
   const taskLabel = useMemo(() => {
+    const found = tasks.find((t) => t.slug === task);
+    if (found) return found.name;
     switch (task) {
       case "decoration":
         return "Décoration";
@@ -78,9 +82,21 @@ const EventStaff = () => {
       case "nettoyage":
         return "Nettoyage";
       default:
-        return "";
+        return task || "";
     }
-  }, [task]);
+  }, [task, tasks]);
+
+  useEffect(() => {
+    (async () => {
+      if (!id) return;
+      try {
+        const ts = await getTasks(id);
+        setTasks(ts as EventTask[]);
+      } catch {
+        setTasks([]);
+      }
+    })();
+  }, [id]);
 
   const readTaskAssigned = (evId: string, t: string): StaffMember[] => {
     try {

@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { getEvent as apiGetEvent, type EventItem } from "@/lib/events";
 import { getProviders, createProvider, updateProvider, deleteProvider, type ProviderItem } from "@/lib/providers";
+import { getTasks, createTask, type EventTask } from "@/lib/tasks";
 import { getVenues as fetchVenues, type Venue } from "@/lib/venues";
 
 type VenueArea = "interieur" | "exterieur" | "les_deux";
@@ -34,21 +35,29 @@ const EventManagement = () => {
   const [provContact, setProvContact] = useState("");
   const [provError, setProvError] = useState("");
 
+  // Tasks (Réaménagement)
+  const [tasks, setTasks] = useState<EventTask[]>([]);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [taskName, setTaskName] = useState("");
+  const [taskError, setTaskError] = useState("");
+
   useEffect(() => {
     (async () => {
       if (!id) return;
       setLoading(true);
       setLoadError("");
       try {
-        const [ev, vs, ps] = await Promise.all([
+        const [ev, vs, ps, ts] = await Promise.all([
           apiGetEvent(id),
           fetchVenues(),
           getProviders(id),
+          getTasks(id),
         ]);
         setEventData(ev as unknown as EventItem);
         const venueList = (vs as Venue[]).map((v) => ({ id: String(v.id), name: String(v.name) }));
         setVenues(venueList);
         setProviders(ps as ProviderItem[]);
+        setTasks(ts as EventTask[]);
       } catch (e) {
         setLoadError(((e as unknown) as { message?: string })?.message ?? "");
       }
@@ -142,6 +151,22 @@ const EventManagement = () => {
     navigate(`/admin/events/${id}/tables`);
   };
 
+  const saveTask = async () => {
+    if (!id) return;
+    const name = taskName.trim();
+    if (!name) {
+      setTaskError("Le nom de la tâche est requis");
+      return;
+    }
+    try {
+      const created = await createTask(id, { name });
+      setTasks((prev) => [created as EventTask, ...prev]);
+      setTaskDialogOpen(false);
+    } catch (e) {
+      setTaskError(((e as unknown) as { message?: string })?.message ?? "Erreur inconnue");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -211,42 +236,26 @@ const EventManagement = () => {
                   <Card className="border border-border">
                     <CardHeader>
                       <h3 className="text-lg font-semibold text-foreground">Réaménagement</h3>
-                      <p className="text-sm text-muted-foreground">Décoration, peinture, nettoyage</p>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                        <Button
-                          type="button"
-                          className="w-full bg-primary hover:bg-primary-hover text-white"
-                          onClick={() => goAssign("decoration")}
-                        >
-                          Décoration
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => goAssign("peinture")}
-                        >
-                          Peinture
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => goAssign("nettoyage_cour")}
-                        >
-                          Net de la cour
-                        </Button>
-
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => goAssign("nettoyage_salle")}
-                          >
-                            Net de la salle
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={() => { setTaskName(""); setTaskError(""); setTaskDialogOpen(true); }}>
+                           <Plus className="w-4 h-4 mr-1" />
+                            Créer une tâche
                           </Button>
+                        </div>
+                        {tasks.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">Aucune tâche. Créez votre première tâche.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {tasks.map((t) => (
+                              <Button key={t.id} type="button" variant="outline" onClick={() => goAssign(t.slug)}>
+                                {t.name}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -268,7 +277,7 @@ const EventManagement = () => {
                         <Button
                           type="button"
                           variant="outline"
-                          className="flex-1"
+                          className="w-full"
                           onClick={goProviders}
                         >
                           Prestataires
@@ -480,6 +489,27 @@ const EventManagement = () => {
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setProvDialogOpen(false)}>Annuler</Button>
             <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={saveProvider}>Enregistrer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Créer une tâche</DialogTitle>
+          </DialogHeader>
+          {taskError && <div className="text-destructive text-sm mb-2">{taskError}</div>}
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">Nom de la tâche</label>
+            <Input
+              value={taskName}
+              onChange={(e) => setTaskName(e.target.value)}
+              placeholder="Ex: Sono, Lumières, Vidéo, etc."
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setTaskDialogOpen(false)}>Annuler</Button>
+            <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={saveTask}>Enregistrer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

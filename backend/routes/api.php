@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\VenueController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\ProviderController;
+use App\Http\Controllers\Api\EventTaskController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -30,4 +31,9 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
     Route::post('events/{event}/providers', [ProviderController::class, 'store']);
     Route::patch('providers/{provider}', [ProviderController::class, 'update']);
     Route::delete('providers/{provider}', [ProviderController::class, 'destroy']);
+    // Event Tasks (Réaménagement)
+    Route::get('events/{event}/tasks', [EventTaskController::class, 'index']);
+    Route::post('events/{event}/tasks', [EventTaskController::class, 'store']);
+    Route::patch('tasks/{task}', [EventTaskController::class, 'update']);
+    Route::delete('tasks/{task}', [EventTaskController::class, 'destroy']);
 });
