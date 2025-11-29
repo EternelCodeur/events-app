@@ -88,6 +88,10 @@ export async function getEvents(): Promise<EventItem[]> {
   return request<EventItem[]>(`${API_BASE}`, { method: "GET" });
 }
 
+export async function getEvent(id: string): Promise<EventItem> {
+  return request<EventItem>(`${API_BASE}/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
 export async function createEvent(payload: CreateEventPayload): Promise<EventItem> {
   const venueIdNum = payload.venueId && /^\d+$/.test(payload.venueId) ? Number(payload.venueId) : undefined;
   const body = JSON.stringify({ ...payload, venueId: venueIdNum });

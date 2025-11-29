@@ -111,7 +111,9 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
                 <img src="/ng-events.png" alt="Logo" className="h-17 w-32" />
               </div>
             ) : (
-              <h1 className="text-xl font-semibold text-foreground">{headerTitle}</h1>
+              <h1 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                {headerTitle}
+              </h1>
             )}
           </div>
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\VenueController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\StaffController;
+use App\Http\Controllers\Api\ProviderController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -24,4 +25,9 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
     Route::apiResource('venues', VenueController::class);
     Route::apiResource('events', EventController::class);
     Route::apiResource('staff', StaffController::class);
+    // Providers (Prestataires) per event
+    Route::get('events/{event}/providers', [ProviderController::class, 'index']);
+    Route::post('events/{event}/providers', [ProviderController::class, 'store']);
+    Route::patch('providers/{provider}', [ProviderController::class, 'update']);
+    Route::delete('providers/{provider}', [ProviderController::class, 'destroy']);
 });
