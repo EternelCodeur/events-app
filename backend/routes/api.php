@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\EventTaskController;
+use App\Http\Controllers\Api\EventAssignmentController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -36,4 +37,8 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
     Route::post('events/{event}/tasks', [EventTaskController::class, 'store']);
     Route::patch('tasks/{task}', [EventTaskController::class, 'update']);
     Route::delete('tasks/{task}', [EventTaskController::class, 'destroy']);
+    // Event-level staff assignments
+    Route::get('events/{event}/assignments', [EventAssignmentController::class, 'index']);
+    Route::post('events/{event}/assignments', [EventAssignmentController::class, 'store']);
+    Route::delete('events/{event}/assignments/{staff}', [EventAssignmentController::class, 'destroy']);
 });

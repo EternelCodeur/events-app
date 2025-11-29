@@ -6,40 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Search } from "lucide-react";
 import { getTasks, type EventTask } from "@/lib/tasks";
+import { getStaff, type StaffMember as ApiStaffMember } from "@/lib/staff";
+import { getEvent } from "@/lib/events";
+import { getAssignments, addAssignment } from "@/lib/eventAssignments";
 
-const mockEvents = [
-  { id: "1", title: "Mariage Dupont" },
-  { id: "2", title: "Conférence Tech 2025" },
-  { id: "3", title: "Gala Entreprise ABC" },
-];
-
-const roles = [
-  "Maître d'hôtel",
-  "Serveurs",
-  "Hôtesses",
-  "Plonge",
-  "Vestiaire",
-  "Sécurité",
-  "Autres",
-] as const;
-
-type StaffRole = (typeof roles)[number];
-
-interface StaffMember {
-  id: string;
-  name: string;
-  role: StaffRole;
-}
-
-const initialStaff: StaffMember[] = [
-  { id: "s1", name: "Alice Martin", role: "Maître d'hôtel" },
-  { id: "s2", name: "Bruno Lopez", role: "Serveurs" },
-  { id: "s3", name: "Carla Dubois", role: "Hôtesses" },
-  { id: "s4", name: "David Morel", role: "Sécurité" },
-  { id: "s5", name: "Emma Rossi", role: "Vestiaire" },
-  { id: "s6", name: "Fabrice Jean", role: "Plonge" },
-  { id: "s7", name: "Giselle Kone", role: "Autres" },
-];
 
 const incompatibleMap: Record<string, string[]> = {
   decoration: ["peinture", "nettoyage_cour", "nettoyage_salle"],
@@ -53,14 +23,14 @@ const EventStaff = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [tasks, setTasks] = useState<EventTask[]>([]);
-
-  const event = mockEvents.find((e) => e.id === id);
-
-  const [availableStaff, setAvailableStaff] = useState<StaffMember[]>(initialStaff);
-  const [assignedStaff, setAssignedStaff] = useState<StaffMember[]>([]);
-  const [taskAssignedStaff, setTaskAssignedStaff] = useState<StaffMember[]>([]);
+  const [eventTitle, setEventTitle] = useState<string>("Événement");
+  const [allStaff, setAllStaff] = useState<ApiStaffMember[]>([]);
+  const [availableStaff, setAvailableStaff] = useState<ApiStaffMember[]>([]);
+  const [assignedStaff, setAssignedStaff] = useState<ApiStaffMember[]>([]);
+  const [taskAssignedStaff, setTaskAssignedStaff] = useState<ApiStaffMember[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState<StaffRole | "tous">("tous");
+  const [roleFilter, setRoleFilter] = useState<string>("tous");
+  const [roles, setRoles] = useState<string[]>([]);
 
   const task = useMemo(() => new URLSearchParams(location.search).get("task") || "", [location.search]);
   const taskLabel = useMemo(() => {
@@ -98,28 +68,62 @@ const EventStaff = () => {
     })();
   }, [id]);
 
-  const readTaskAssigned = (evId: string, t: string): StaffMember[] => {
+  const readTaskAssigned = (evId: string, t: string): ApiStaffMember[] => {
     try {
       const raw = localStorage.getItem(`eventTaskAssigned:${evId}:${t}`);
-      return raw ? (JSON.parse(raw) as StaffMember[]) : [];
+      const parsed = raw ? (JSON.parse(raw) as ApiStaffMember[]) : [];
+      return parsed.map((s) => ({ ...s, id: String(s.id) }));
     } catch {
       return [];
     }
   };
 
   useEffect(() => {
-    if (!id) return;
-    const key = `eventStaffAssigned:${id}`;
-    try {
-      const raw = localStorage.getItem(key);
-      const saved: StaffMember[] = raw ? JSON.parse(raw) : [];
-      setAssignedStaff(saved);
-      const savedIds = new Set(saved.map((s) => s.id));
-      setAvailableStaff(initialStaff.filter((m) => !savedIds.has(m.id)));
-    } catch (_) {
-      setAssignedStaff([]);
-      setAvailableStaff(initialStaff);
-    }
+    (async () => {
+      if (!id) return;
+      try {
+        const list = await getAssignments(id);
+        const normalized = (list as ApiStaffMember[]).map((s) => ({ ...s, id: String(s.id) }));
+        setAssignedStaff(normalized);
+      } catch (_) {
+        setAssignedStaff([]);
+      }
+    })();
+  }, [id]);
+
+  // Charger le personnel depuis l'API (scopé à l'entreprise)
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await getStaff();
+        const normalized = (list as ApiStaffMember[]).map((s) => ({ ...s, id: String(s.id) }));
+        setAllStaff(normalized);
+        const uniqueRoles = Array.from(new Set(normalized.map((s) => s.role).filter((r): r is string => !!r)));
+        setRoles(uniqueRoles);
+      } catch {
+        setAllStaff([]);
+        setRoles([]);
+      }
+    })();
+  }, []);
+
+  // Recalculer les disponibles quand la liste ou les assignés changent
+  useEffect(() => {
+    const savedIds = new Set(assignedStaff.map((s) => s.id));
+    setAvailableStaff(allStaff.filter((m) => !savedIds.has(m.id)));
+  }, [allStaff, assignedStaff]);
+
+  // Charger le titre de l'événement depuis l'API
+  useEffect(() => {
+    (async () => {
+      if (!id) return;
+      try {
+        const ev = await getEvent(id);
+        setEventTitle(ev.title || "Événement");
+      } catch {
+        setEventTitle("Événement");
+      }
+    })();
   }, [id]);
 
   useEffect(() => {
@@ -129,7 +133,7 @@ const EventStaff = () => {
     }
     try {
       const raw = localStorage.getItem(`eventTaskAssigned:${id}:${task}`);
-      const saved: StaffMember[] = raw ? JSON.parse(raw) : [];
+      const saved: ApiStaffMember[] = raw ? JSON.parse(raw) : [];
       setTaskAssignedStaff(saved);
     } catch (_) {
       setTaskAssignedStaff([]);
@@ -149,18 +153,18 @@ const EventStaff = () => {
 
   const filteredStaff = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    const source: StaffMember[] = task
+    const source: ApiStaffMember[] = task
       ? assignedStaff.filter((m) => !taskAssignedStaff.some((t) => t.id === m.id))
       : availableStaff;
     return source.filter((member) => {
       if (blockedIds.has(member.id)) return false;
-      const matchesRole = roleFilter === "tous" ? true : member.role === roleFilter;
+      const matchesRole = roleFilter === "tous" ? true : (member.role || "").toLowerCase() === roleFilter.toLowerCase();
       if (!term) return matchesRole;
       return matchesRole && member.name.toLowerCase().includes(term);
     });
   }, [task, availableStaff, assignedStaff, taskAssignedStaff, searchTerm, roleFilter, blockedIds]);
 
-  const handleAssign = (member: StaffMember) => {
+  const handleAssign = async (member: ApiStaffMember) => {
     if (task) {
       if (blockedIds.has(member.id)) return;
       setTaskAssignedStaff((prev) => {
@@ -171,14 +175,15 @@ const EventStaff = () => {
         return next;
       });
     } else {
-      setAssignedStaff((prev) => {
-        const next = [...prev, member];
-        if (id) {
-          localStorage.setItem(`eventStaffAssigned:${id}`, JSON.stringify(next));
-        }
-        return next;
-      });
-      setAvailableStaff((prev) => prev.filter((m) => m.id !== member.id));
+      if (!id) return;
+      try {
+        const created = await addAssignment(id, member.id);
+        const normalized = { ...(created as ApiStaffMember), id: String((created as ApiStaffMember).id) };
+        setAssignedStaff((prev) => [...prev, normalized]);
+        setAvailableStaff((prev) => prev.filter((m) => m.id !== member.id));
+      } catch (_) {
+        // noop: on pourrait afficher une alerte si besoin
+      }
     }
   };
 
@@ -187,9 +192,7 @@ const EventStaff = () => {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-3xl font-bold text-foreground">
-              {event ? event.title : "Événement inconnu"}
-            </h1>
+            <h1 className="text-3xl font-bold text-foreground">{eventTitle}</h1>
             {taskLabel && (
               <Badge className="bg-primary text-white">Tâche: {taskLabel}</Badge>
             )}
@@ -228,9 +231,7 @@ const EventStaff = () => {
                 className="border border-border rounded-md px-4 py-2 text-sm bg-background"
                 value={roleFilter}
                 onChange={(e) =>
-                  setRoleFilter(
-                    (e.target.value as StaffRole | "tous") || "tous",
-                  )
+                  setRoleFilter(e.target.value || "tous")
                 }
               >
                 <option value="tous">Tous les postes</option>
