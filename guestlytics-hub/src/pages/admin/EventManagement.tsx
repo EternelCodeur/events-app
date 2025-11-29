@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { getEvent as apiGetEvent, type EventItem } from "@/lib/events";
-import { getProviders, createProvider, updateProvider, deleteProvider, type ProviderItem } from "@/lib/providers";
+import { getProvidersPage, createProvider, updateProvider, deleteProvider, type ProviderItem } from "@/lib/providers";
 import { getTasks, createTask, type EventTask } from "@/lib/tasks";
 import { getVenues as fetchVenues, type Venue } from "@/lib/venues";
 
@@ -24,6 +24,11 @@ const EventManagement = () => {
   const canShowRoomCleaning = eventData?.areaChoice === "interieur" || eventData?.areaChoice === "les_deux";
 
   const [providers, setProviders] = useState<ProviderItem[]>([]);
+  const [providersPage, setProvidersPage] = useState(1);
+  const [providersPerPage] = useState(7);
+  const [providersLastPage, setProvidersLastPage] = useState(1);
+  const [providersTotal, setProvidersTotal] = useState(0);
+  const [providersTotals, setProvidersTotals] = useState({ amountCfa: 0, advanceCfa: 0, restCfa: 0 });
   const providersSectionRef = useRef<HTMLDivElement | null>(null);
   const [provDialogOpen, setProvDialogOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderItem | null>(null);
@@ -47,17 +52,16 @@ const EventManagement = () => {
       setLoading(true);
       setLoadError("");
       try {
-        const [ev, vs, ps, ts] = await Promise.all([
+        const [ev, vs, ts] = await Promise.all([
           apiGetEvent(id),
           fetchVenues(),
-          getProviders(id),
           getTasks(id),
         ]);
         setEventData(ev as unknown as EventItem);
         const venueList = (vs as Venue[]).map((v) => ({ id: String(v.id), name: String(v.name) }));
         setVenues(venueList);
-        setProviders(ps as ProviderItem[]);
         setTasks(ts as EventTask[]);
+        setProvidersPage(1);
       } catch (e) {
         setLoadError(((e as unknown) as { message?: string })?.message ?? "");
       }
@@ -65,14 +69,32 @@ const EventManagement = () => {
     })();
   }, [id]);
 
+  useEffect(() => {
+    (async () => {
+      if (!id) return;
+      try {
+        const pageData = await getProvidersPage(id, providersPage, providersPerPage);
+        setProviders(pageData.items as ProviderItem[]);
+        setProvidersLastPage(pageData.lastPage);
+        setProvidersTotal(pageData.total);
+        setProvidersTotals(pageData.totals);
+      } catch (_) {
+        setProviders([]);
+        setProvidersLastPage(1);
+        setProvidersTotal(0);
+        setProvidersTotals({ amountCfa: 0, advanceCfa: 0, restCfa: 0 });
+      }
+    })();
+  }, [id, providersPage, providersPerPage]);
+
   const eventBudgetCfa = useMemo(() => {
     const raw = eventData?.budget ? String(eventData.budget) : "0";
     const digits = raw.replace(/\D+/g, "");
     return digits ? parseInt(digits, 10) : 0;
   }, [eventData]);
-  const totalProvidersAmount = useMemo(() => providers.reduce((s, p) => s + (p.amountCfa || 0), 0), [providers]);
-  const totalAdvance = useMemo(() => providers.reduce((s, p) => s + (p.advanceCfa || 0), 0), [providers]);
-  const totalRest = useMemo(() => providers.reduce((s, p) => s + Math.max((p.amountCfa || 0) - (p.advanceCfa || 0), 0), 0), [providers]);
+  const totalProvidersAmount = useMemo(() => providersTotals.amountCfa, [providersTotals]);
+  const totalAdvance = useMemo(() => providersTotals.advanceCfa, [providersTotals]);
+  const totalRest = useMemo(() => providersTotals.restCfa, [providersTotals]);
   const remainingBudget = useMemo(() => Math.max(eventBudgetCfa - totalProvidersAmount, 0), [eventBudgetCfa, totalProvidersAmount]);
 
   const venueName = useMemo(() => {
@@ -119,10 +141,21 @@ const EventManagement = () => {
       let saved: ProviderItem;
       if (editingProvider) {
         saved = (await updateProvider(editingProvider.id, payload)) as ProviderItem;
-        setProviders((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
+        // Rafraîchir la page courante après modification
+        const pageData = await getProvidersPage(id, providersPage, providersPerPage);
+        setProviders(pageData.items as ProviderItem[]);
+        setProvidersLastPage(pageData.lastPage);
+        setProvidersTotal(pageData.total);
+        setProvidersTotals(pageData.totals);
       } else {
         saved = (await createProvider(id, payload)) as ProviderItem;
-        setProviders((prev) => [saved, ...prev]);
+        // Aller à la 1ère page pour voir le nouveau prestataire (ordre latest)
+        setProvidersPage(1);
+        const pageData = await getProvidersPage(id, 1, providersPerPage);
+        setProviders(pageData.items as ProviderItem[]);
+        setProvidersLastPage(pageData.lastPage);
+        setProvidersTotal(pageData.total);
+        setProvidersTotals(pageData.totals);
       }
       setProvDialogOpen(false);
     } catch (e) {
@@ -133,7 +166,19 @@ const EventManagement = () => {
   const removeProvider = async (p: ProviderItem) => {
     try {
       await deleteProvider(p.id);
-      setProviders((prev) => prev.filter((x) => x.id !== p.id));
+      // Recharger la page; si vide et page > 1, reculer d'une page
+      if (!id) return;
+      let pageToLoad = providersPage;
+      let pageData = await getProvidersPage(id, pageToLoad, providersPerPage);
+      if (pageData.items.length === 0 && pageToLoad > 1) {
+        pageToLoad = pageToLoad - 1;
+        setProvidersPage(pageToLoad);
+        pageData = await getProvidersPage(id, pageToLoad, providersPerPage);
+      }
+      setProviders(pageData.items as ProviderItem[]);
+      setProvidersLastPage(pageData.lastPage);
+      setProvidersTotal(pageData.total);
+      setProvidersTotals(pageData.totals);
     } catch (e) {
       // noop
     }
@@ -446,6 +491,36 @@ const EventManagement = () => {
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between text-sm">
+                <div className="text-muted-foreground">
+                  Page {providersPage} / {providersLastPage} • {providersPerPage} par page • {providersTotal} au total
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={providersPage <= 1}
+                    onClick={() => {
+                      setProvidersPage((p) => Math.max(1, p - 1));
+                      providersSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                  >
+                    Précédent
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={providersPage >= providersLastPage}
+                    onClick={() => {
+                      setProvidersPage((p) => p + 1);
+                      providersSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                  >
+                    Suivant
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

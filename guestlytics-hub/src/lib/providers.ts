@@ -62,8 +62,48 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+type ProvidersIndexResponse = {
+  data: ProviderItem[];
+  meta?: {
+    current_page?: number;
+    last_page?: number;
+    per_page?: number;
+    total?: number;
+  };
+  extra?: {
+    totals?: { amount_cfa?: number; advance_cfa?: number; rest_cfa?: number };
+  };
+};
+
+export type ProvidersPageResult = {
+  items: ProviderItem[];
+  page: number;
+  lastPage: number;
+  perPage: number;
+  total: number;
+  totals: { amountCfa: number; advanceCfa: number; restCfa: number };
+};
+
 export async function getProviders(eventId: string): Promise<ProviderItem[]> {
-  return request<ProviderItem[]>(`/api/events/${encodeURIComponent(eventId)}/providers`, { method: "GET" });
+  const res = await request<unknown>(`/api/events/${encodeURIComponent(eventId)}/providers`, { method: "GET" });
+  if (Array.isArray(res)) return res as ProviderItem[];
+  const obj = res as ProvidersIndexResponse;
+  return Array.isArray(obj?.data) ? (obj.data as ProviderItem[]) : [];
+}
+
+export async function getProvidersPage(eventId: string, page = 1, perPage = 7): Promise<ProvidersPageResult> {
+  const res = await request<ProvidersIndexResponse>(`/api/events/${encodeURIComponent(eventId)}/providers?page=${encodeURIComponent(String(page))}&perPage=${encodeURIComponent(String(perPage))}`, { method: "GET" });
+  const items = Array.isArray(res.data) ? res.data : [];
+  const pageNum = res.meta?.current_page ?? page;
+  const lastPage = res.meta?.last_page ?? page;
+  const per = res.meta?.per_page ?? perPage;
+  const total = res.meta?.total ?? items.length;
+  const totals = {
+    amountCfa: Number(res.extra?.totals?.amount_cfa ?? 0),
+    advanceCfa: Number(res.extra?.totals?.advance_cfa ?? 0),
+    restCfa: Number(res.extra?.totals?.rest_cfa ?? 0),
+  };
+  return { items, page: Number(pageNum), lastPage: Number(lastPage), perPage: Number(per), total: Number(total), totals };
 }
 
 export async function createProvider(eventId: string, payload: CreateProviderPayload): Promise<ProviderItem> {

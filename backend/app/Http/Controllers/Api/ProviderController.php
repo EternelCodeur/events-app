@@ -16,8 +16,26 @@ class ProviderController extends Controller
         if (($user->role ?? 'admin') !== 'superadmin' && (int)$event->entreprise_id !== (int)$user->entreprise_id) {
             abort(403, 'Forbidden');
         }
-        $list = Provider::where('event_id', $event->id)->latest()->get();
-        return ProviderResource::collection($list);
+        $perPage = (int) $request->integer('perPage', 7);
+        if ($perPage < 1) { $perPage = 7; }
+        if ($perPage > 100) { $perPage = 100; }
+
+        $query = Provider::where('event_id', $event->id)->latest();
+        $paginator = $query->paginate($perPage)->appends($request->query());
+
+        $sumAmount = (int) Provider::where('event_id', $event->id)->sum('amount_cfa');
+        $sumAdvance = (int) Provider::where('event_id', $event->id)->sum('advance_cfa');
+        $sumRest = max($sumAmount - $sumAdvance, 0);
+
+        return ProviderResource::collection($paginator)->additional([
+            'extra' => [
+                'totals' => [
+                    'amount_cfa' => $sumAmount,
+                    'advance_cfa' => $sumAdvance,
+                    'rest_cfa' => $sumRest,
+                ],
+            ],
+        ]);
     }
 
     public function store(Request $request, Event $event)
