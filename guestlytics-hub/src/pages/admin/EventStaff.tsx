@@ -9,6 +9,7 @@ import { getTasks, type EventTask } from "@/lib/tasks";
 import { getStaff, type StaffMember as ApiStaffMember } from "@/lib/staff";
 import { getEvent } from "@/lib/events";
 import { getAssignments, addAssignment } from "@/lib/eventAssignments";
+import { getTaskAssignments, addTaskAssignment } from "@/lib/taskAssignments";
 
 
 const incompatibleMap: Record<string, string[]> = {
@@ -55,6 +56,8 @@ const EventStaff = () => {
         return task || "";
     }
   }, [task, tasks]);
+
+  const selectedTask = useMemo(() => tasks.find((t) => t.slug === task) || null, [task, tasks]);
 
   useEffect(() => {
     (async () => {
@@ -127,18 +130,20 @@ const EventStaff = () => {
   }, [id]);
 
   useEffect(() => {
-    if (!id || !task) {
-      setTaskAssignedStaff([]);
-      return;
-    }
-    try {
-      const raw = localStorage.getItem(`eventTaskAssigned:${id}:${task}`);
-      const saved: ApiStaffMember[] = raw ? JSON.parse(raw) : [];
-      setTaskAssignedStaff(saved);
-    } catch (_) {
-      setTaskAssignedStaff([]);
-    }
-  }, [id, task]);
+    (async () => {
+      if (!id || !selectedTask) {
+        setTaskAssignedStaff([]);
+        return;
+      }
+      try {
+        const list = await getTaskAssignments(id, selectedTask.id);
+        const normalized = (list as ApiStaffMember[]).map((s) => ({ ...s, id: String(s.id) }));
+        setTaskAssignedStaff(normalized);
+      } catch (_) {
+        setTaskAssignedStaff([]);
+      }
+    })();
+  }, [id, selectedTask]);
 
   const blockedIds = useMemo(() => {
     if (!id || !task) return new Set<string>();
@@ -167,13 +172,14 @@ const EventStaff = () => {
   const handleAssign = async (member: ApiStaffMember) => {
     if (task) {
       if (blockedIds.has(member.id)) return;
-      setTaskAssignedStaff((prev) => {
-        const next = [...prev, member];
-        if (id) {
-          localStorage.setItem(`eventTaskAssigned:${id}:${task}`, JSON.stringify(next));
-        }
-        return next;
-      });
+      if (!id || !selectedTask) return;
+      try {
+        const created = await addTaskAssignment(id, selectedTask.id, member.id);
+        const normalized = { ...(created as ApiStaffMember), id: String((created as ApiStaffMember).id) };
+        setTaskAssignedStaff((prev) => [...prev, normalized]);
+      } catch (_) {
+        // noop
+      }
     } else {
       if (!id) return;
       try {
@@ -302,12 +308,14 @@ const EventStaff = () => {
       )}
 
       {taskLabel ? (
-        taskAssignedStaff.length > 0 && (
-          <Card>
-            <CardHeader>
-              <h2 className="text-xl font-semibold text-foreground">Employés assignés à la tâche {taskLabel}</h2>
-            </CardHeader>
-            <CardContent>
+        <Card>
+          <CardHeader>
+            <h2 className="text-xl font-semibold text-foreground">Employés assignés à la tâche {taskLabel}</h2>
+          </CardHeader>
+          <CardContent>
+            {taskAssignedStaff.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun employé n'est encore assigné à cette tâche.</p>
+            ) : (
               <ul className="text-sm space-y-1 text-muted-foreground">
                 {taskAssignedStaff.map((member) => (
                   <li key={member.id}>
@@ -315,9 +323,9 @@ const EventStaff = () => {
                   </li>
                 ))}
               </ul>
-            </CardContent>
-          </Card>
-        )
+            )}
+          </CardContent>
+        </Card>
       ) : (
         assignedStaff.length > 0 && (
           <Card>
