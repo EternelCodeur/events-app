@@ -109,8 +109,34 @@ Schedule::call(function () {
     }
     $activeIds = DB::table('event_staff_assignments as esa')
         ->join('events as ev', 'ev.id', '=', 'esa.event_id')
-        ->where('ev.status', 'en_cours')
-        ->whereDate('ev.date', '=', $nowDate)
+        ->where(function ($w) use ($nowDate, $nowTime) {
+            $w->where(function ($q1) use ($nowDate) {
+                $q1->where('ev.status', 'en_cours')
+                   ->whereDate('ev.date', '=', $nowDate);
+            })->orWhere(function ($q2) use ($nowDate, $nowTime) {
+                $q2->where('ev.status', 'confirme')
+                   ->whereDate('ev.date', '=', $nowDate)
+                   ->where(function ($q) use ($nowTime) {
+                       $q->where(function ($qq) use ($nowTime) {
+                           $qq->whereNotNull('ev.start_time')
+                              ->whereNotNull('ev.end_time')
+                              ->where('ev.start_time', '<=', $nowTime)
+                              ->where('ev.end_time', '>', $nowTime);
+                       })->orWhere(function ($qq) use ($nowTime) {
+                           $qq->whereNull('ev.start_time')
+                              ->whereNotNull('ev.end_time')
+                              ->where('ev.end_time', '>', $nowTime);
+                       })->orWhere(function ($qq) use ($nowTime) {
+                           $qq->whereNotNull('ev.start_time')
+                              ->whereNull('ev.end_time')
+                              ->where('ev.start_time', '<=', $nowTime);
+                       })->orWhere(function ($qq) {
+                           $qq->whereNull('ev.start_time')
+                              ->whereNull('ev.end_time');
+                       });
+                   });
+            });
+        })
         ->distinct()
         ->pluck('esa.staff_id');
 

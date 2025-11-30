@@ -20,7 +20,7 @@ import {
 } from "@/lib/events";
 import { getVenues as fetchVenues } from "@/lib/venues";
 
-type EventStatus = "en_attente" | "confirme" | "annuler" | "en_cours" | "termine";
+type EventStatus = "en_attente" | "confirme" | "annuler" | "en_cours" | "termine" | "echoue";
 type VenueArea = "interieur" | "exterieur" | "les_deux";
 type EventType = "mariage" | "celebration_religieuse" | "cocktail";
 
@@ -47,8 +47,9 @@ const statusColors: Record<EventStatus | "all", string> = {
   en_attente: "bg-accent hover:bg-accent/90",
   confirme: "bg-success hover:bg-success/90",
   en_cours: "bg-primary hover:bg-primary/90",
-  termine: "bg-muted hover:bg-muted/90",
+  termine: "bg-orange-500 hover:bg-orange-600",
   annuler: "bg-destructive hover:bg-destructive/90",
+  echoue: "bg-destructive/80 hover:bg-destructive",
   all: "bg-muted",
 };
 
@@ -58,6 +59,7 @@ const statusLabels: Record<EventStatus, string> = {
   en_cours: "En cours",
   termine: "Terminé",
   annuler: "Annulé",
+  echoue: "Échoué",
 };
 
 const Events = () => {
@@ -372,6 +374,7 @@ const Events = () => {
                 <option value="en_cours">En cours</option>
                 <option value="en_attente">En attente</option>
                 <option value="termine">Terminé</option>
+                <option value="echoue">Échoué</option>
                 <option value="annuler">Annulé</option>
               </select>
             </div>

@@ -23,7 +23,7 @@ const statusColors: Record<EventStatus, string> = {
   en_attente: "bg-accent hover:bg-accent/90",
   confirme: "bg-success hover:bg-success/90",
   en_cours: "bg-primary hover:bg-primary/90",
-  termine: "bg-muted hover:bg-muted/90",
+  termine: "bg-orange-500 hover:bg-orange-600",
   annuler: "bg-destructive hover:bg-destructive/90",
 };
 
