@@ -120,41 +120,36 @@ const Users: React.FC = () => {
           ) : error ? (
             <p className="text-destructive">{error}</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left bg-gray-200 border-b border-border">
-                    <th className="py-2 pr-2">Nom</th>
-                    <th className="py-2 pr-2">Email</th>
-                    <th className="py-2 pr-2">Rôle</th>
-                    <th className="py-2 pr-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <div>
+              {filtered.length === 0 ? (
+                <div className="py-6 text-center text-muted-foreground">Aucun utilisateur</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filtered.map((u) => (
-                    <tr key={u.id} className="border-b border-border">
-                      <td className="py-2 pr-2">{u.name}</td>
-                      <td className="py-2 pr-2">{u.email}</td>
-                      <td className="py-2 pr-2">{roleLabels[u.role]}</td>
-                      <td className="py-2 pr-2">
-                        <div className="flex items-center gap-2">
-                          <Button type="button" className="bg-primary hover:bg-primary-hover text-white" size="sm" onClick={() => openEdit(u)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button type="button" className="bg-red-600 hover:bg-red-700 text-white" size="sm" onClick={() => remove(u)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                    <Card key={u.id} className="border border-border">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-semibold text-foreground">{u.name}</div>
+                            <div className="text-sm text-muted-foreground">{u.email}</div>
+                            <div className="mt-2 inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700">
+                              {roleLabels[u.role]}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button type="button" className="bg-primary hover:bg-primary-hover text-white" size="sm" onClick={() => openEdit(u)} aria-label={`Modifier ${u.name}`}>
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button type="button" className="bg-red-600 hover:bg-red-700 text-white" size="sm" onClick={() => remove(u)} aria-label={`Supprimer ${u.name}`}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                      </td>
-                    </tr>
+                      </CardContent>
+                    </Card>
                   ))}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="py-6 text-center text-muted-foreground">Aucun utilisateur</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
