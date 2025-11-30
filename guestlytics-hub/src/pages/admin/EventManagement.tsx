@@ -22,6 +22,47 @@ const EventManagement = () => {
   const [loadError, setLoadError] = useState("");
   const hasEvent = Boolean(id);
   const canShowRoomCleaning = eventData?.areaChoice === "interieur" || eventData?.areaChoice === "les_deux";
+  const isAssignForbidden = useMemo(() => {
+    const s = eventData?.status;
+    return s === "termine" || s === "annuler" || s === "echoue";
+  }, [eventData?.status]);
+
+  useEffect(() => {
+    if (isAssignForbidden) setActivePhase("apres");
+  }, [isAssignForbidden]);
+
+  const isCancelledOrFailed = useMemo(() => {
+    const s = eventData?.status;
+    return s === "annuler" || s === "echoue";
+  }, [eventData?.status]);
+
+  const isFinished = useMemo(() => eventData?.status === "termine", [eventData?.status]);
+
+  const eventPassed = useMemo(() => {
+    if (!eventData?.date) return false;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const now = new Date();
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const nowHM = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const d = String(eventData.date);
+    if (d < today) return true;
+    if (d > today) return false;
+    const end = eventData.endTime ? String(eventData.endTime) : "";
+    const start = eventData.startTime ? String(eventData.startTime) : "";
+    if (end) return nowHM >= end;
+    if (start) return nowHM >= start;
+    return false;
+  }, [eventData?.date, eventData?.startTime, eventData?.endTime]);
+
+  const forcedPhase: "avant" | "apres" | null = useMemo(() => {
+    if (isCancelledOrFailed) return null; // hide operational entirely
+    if (isFinished) return "apres";
+    const s = eventData?.status;
+    if (s === "en_attente" || s === "confirme") {
+      return eventPassed ? "apres" : "avant";
+    }
+    return "avant";
+  }, [isCancelledOrFailed, isFinished, eventData?.status, eventPassed]);
 
   const [providers, setProviders] = useState<ProviderItem[]>([]);
   const [providersPage, setProvidersPage] = useState(1);
@@ -382,6 +423,7 @@ const EventManagement = () => {
         </div>
       </div>
 
+      {!isCancelledOrFailed && (
       <Card>
         <CardHeader>
           <h2 className="text-xl font-semibold text-foreground">
@@ -391,43 +433,42 @@ const EventManagement = () => {
         <CardContent>
           {hasEvent ? (
             <div className="space-y-6">
+              {forcedPhase === null ? null : null}
+              {/* Phase toggles hidden per new rules; we force a single phase view */}
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button
-                  type="button"
-                  className={`flex-1 ${activePhase === "avant" ? "bg-primary hover:bg-primary-hover text-white" : "bg-muted hover:bg-muted/80 text-foreground"}`}
-                  onClick={() => setActivePhase("avant")}
-                >
-                  Avant l'événement
-                </Button>
-                <Button
-                  type="button"
-                  className={`flex-1 ${activePhase === "apres" ? "bg-primary hover:bg-primary-hover text-white" : "bg-muted hover:bg-muted/80 text-foreground"}`}
-                  onClick={() => setActivePhase("apres")}
-                >
-                  Après l'événement
-                </Button>
+                {forcedPhase === "avant" && (
+                  <Button type="button" className="flex-1 bg-primary hover:bg-primary-hover text-white" disabled>
+                    Avant l'événement
+                  </Button>
+                )}
+                {forcedPhase === "apres" && (
+                  <Button type="button" className="flex-1 bg-primary hover:bg-primary-hover text-white" disabled>
+                    Après l'événement
+                  </Button>
+                )}
               </div>
 
-              {activePhase === "avant" && (
+              {((forcedPhase ? forcedPhase === "avant" : (!isAssignForbidden && activePhase === "avant"))) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <Card className="border border-border">
-                    <CardHeader>
-                      <h3 className="text-lg font-semibold text-foreground">Personnel de l'événement</h3>
-                      <p className="text-sm text-muted-foreground">Assigner des personnes à cet événement</p>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          className="flex-1 bg-primary hover:bg-primary-hover text-white"
-                          onClick={() => navigate(`/admin/events/${id}/staff`)}
-                        >
-                          Assigner des personnes
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
+                  {!isAssignForbidden && (
+                    <Card className="border border-border">
+                      <CardHeader>
+                        <h3 className="text-lg font-semibold text-foreground">Personnel de l'événement</h3>
+                        <p className="text-sm text-muted-foreground">Assigner des personnes à cet événement</p>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            className="flex-1 bg-primary hover:bg-primary-hover text-white"
+                            onClick={() => navigate(`/admin/events/${id}/staff`)}
+                          >
+                            Assigner des personnes
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                   <Card className="border border-border">
                     <CardHeader>
                       <h3 className="text-lg font-semibold text-foreground">Réaménagement</h3>
@@ -436,25 +477,28 @@ const EventManagement = () => {
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={() => { setTaskName(""); setTaskError(""); setTaskDialogOpen(true); }}>
-                           <Plus className="w-4 h-4 mr-1" />
+                            <Plus className="w-4 h-4 mr-1" />
                             Créer une tâche
                           </Button>
                         </div>
-                        {tasks.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">Aucune tâche. Créez votre première tâche.</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            {tasks.map((t) => (
-                              <Button key={t.id} type="button" variant="outline" onClick={() => goAssign(t.slug)}>
-                                {t.name}
-                              </Button>
-                            ))}
-                          </div>
+                        {!isAssignForbidden && (
+                          <>
+                            {tasks.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">Aucune tâche. Créez votre première tâche.</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {tasks.map((t) => (
+                                  <Button key={t.id} type="button" variant="outline" onClick={() => goAssign(t.slug)}>
+                                    {t.name}
+                                  </Button>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </CardContent>
                   </Card>
-
                   <Card className="border border-border">
                     <CardHeader>
                       <h3 className="text-lg font-semibold text-foreground">Mise en place</h3>
@@ -480,69 +524,56 @@ const EventManagement = () => {
                       </div>
                     </CardContent>
                   </Card>
-
                 </div>
               )}
-
-              {activePhase === "apres" && (
+              {((forcedPhase ? forcedPhase === "apres" : activePhase === "apres")) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <Card className="border border-border">
-                    <CardHeader>
-                      <h3 className="text-lg font-semibold text-foreground">Personnel de l'événement</h3>
-                      <p className="text-sm text-muted-foreground">Assigner des personnes à cet événement</p>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          className="flex-1 bg-primary hover:bg-primary-hover text-white"
-                          onClick={() => navigate(`/admin/events/${id}/staff`)}
-                        >
-                          Assigner des personnes
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border border-border">
-                    <CardHeader>
-                      <h3 className="text-lg font-semibold text-foreground">Démontage</h3>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          className="flex-1 bg-primary hover:bg-primary-hover text-white"
-                          onClick={() => goAssign("demontage")}
-                        >
-                          Assigner à la tâche
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border border-border">
-                    <CardHeader>
-                      <h3 className="text-lg font-semibold text-foreground">Nettoyage</h3>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => goAssign("nettoyage_cour")}
-                        >
-                          Nettoyage de la cour
-                        </Button>
+                  {!isAssignForbidden && (
+                    <Card className="border border-border">
+                      <CardHeader>
+                        <h3 className="text-lg font-semibold text-foreground">Personnel de l'événement</h3>
+                        <p className="text-sm text-muted-foreground">Assigner des personnes à cet événement</p>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex gap-2">
                           <Button
                             type="button"
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => goAssign("nettoyage_salle")}
+                            className="flex-1 bg-primary hover:bg-primary-hover text-white"
+                            onClick={() => navigate(`/admin/events/${id}/staff`)}
                           >
-                            Nettoyage de la salle
+                            Assigner des personnes
                           </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  <Card className="border border-border">
+                    <CardHeader>
+                      <h3 className="text-lg font-semibold text-foreground">Tâches après l'événement</h3>
+                    </CardHeader>
+                    <CardContent>
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={() => { setTaskName(""); setTaskError(""); setTaskDialogOpen(true); }}>
+                            <Plus className="w-4 h-4 mr-1" />
+                            Créer une tâche
+                          </Button>
+                        </div>
+                        {!isAssignForbidden && (
+                          <>
+                            {tasks.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">Aucune tâche. Créez votre première tâche.</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {tasks.map((t) => (
+                                  <Button key={t.id} type="button" variant="outline" onClick={() => goAssign(t.slug)}>
+                                    {t.name}
+                                  </Button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -556,7 +587,7 @@ const EventManagement = () => {
           )}
         </CardContent>
       </Card>
-
+      )}
       {hasEvent && (
         <div ref={providersSectionRef} id="providers-section" className="space-y-4">
           <Card className="border border-border">
@@ -566,7 +597,9 @@ const EventManagement = () => {
                 <div className="flex items-center gap-2">
                   <Button type="button" variant="outline" onClick={() => printProviders("all", true)} disabled={isPrinting}>Imprimer</Button>
                   <Button type="button" variant="outline" onClick={() => exportProvidersExcel("all")}>Excel</Button>
-                  <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={openCreateProvider}>Ajouter</Button>
+                  {!isAssignForbidden && (
+                    <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={openCreateProvider}>Ajouter</Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -617,9 +650,11 @@ const EventManagement = () => {
                         <td className="py-2 pr-2 text-center">{p.contact || "-"}</td>
                         <td className="py-2 pr-2">
                           <div className="flex items-center gap-2">
-                            <Button type="button" className="bg-primary hover:bg-primary-hover text-white" size="sm" onClick={() => openEditProvider(p)}>
-                              <Pencil className="w-4 h-4" />
-                            </Button>
+                            {!isAssignForbidden && (
+                              <Button type="button" className="bg-primary hover:bg-primary-hover text-white" size="sm" onClick={() => openEditProvider(p)}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button type="button" className="bg-red-600 hover:bg-red-700 text-white" size="sm" onClick={() => removeProvider(p)}>
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -715,7 +750,7 @@ const EventManagement = () => {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setProvDialogOpen(false)}>Annuler</Button>
-            <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={saveProvider}>Enregistrer</Button>
+            <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={saveProvider} disabled={isAssignForbidden}>Enregistrer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

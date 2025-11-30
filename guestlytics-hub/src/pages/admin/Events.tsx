@@ -18,7 +18,7 @@ import {
   updateEvent as apiUpdateEvent,
   deleteEvent as apiDeleteEvent,
 } from "@/lib/events";
-import { getVenues as fetchVenues } from "@/lib/venues";
+import { getVenues as fetchVenues, type Venue } from "@/lib/venues";
 
 type EventStatus = "en_attente" | "confirme" | "annuler" | "en_cours" | "termine" | "echoue";
 type VenueArea = "interieur" | "exterieur" | "les_deux";
@@ -65,7 +65,7 @@ const statusLabels: Record<EventStatus, string> = {
 const Events = () => {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [venues, setVenues] = useState<
-    { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]
+    { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe"; capacity: number }[]
   >([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | EventStatus>("all");
@@ -79,7 +79,14 @@ const Events = () => {
     (async () => {
       try {
         const [vs, es] = await Promise.all([fetchVenues(), fetchEvents()]);
-        setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+        const vlist = (vs as Venue[]).map((v) => ({
+          id: String(v.id),
+          name: String(v.name),
+          area: v.area as VenueArea,
+          status: v.status,
+          capacity: Number(v.capacity) || 0,
+        }));
+        setVenues(vlist);
         setEvents(es as unknown as EventItem[]);
       } catch (e) {
         console.warn("Failed to load events or venues", e);
@@ -136,6 +143,11 @@ const Events = () => {
       );
       list = venues.filter((v) => !occupied.has(v.id));
     }
+    // Filter by capacity if a desired capacity is provided
+    const desired = Number(formCapacity || 0);
+    if (Number.isFinite(desired) && desired > 0) {
+      list = list.filter((v) => (Number(v.capacity) || 0) >= desired);
+    }
     // Always keep the currently assigned venue when editing
     if (editingEvent?.venue) {
       const current = venues.find((v) => v.id === editingEvent.venue);
@@ -144,7 +156,7 @@ const Events = () => {
       }
     }
     return list;
-  }, [venues, events, formDate, formStartTime, formEndTime, editingEvent]);
+  }, [venues, events, formDate, formStartTime, formEndTime, formCapacity, editingEvent]);
 
   useEffect(() => {
     if (allowedAreas.length === 1) {
@@ -230,7 +242,14 @@ const Events = () => {
       setEvents((prev) => prev.filter((e) => e.id !== id));
       try {
         const vs = await fetchVenues();
-        setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+        const vlist = (vs as Venue[]).map((v) => ({
+          id: String(v.id),
+          name: String(v.name),
+          area: v.area as VenueArea,
+          status: v.status,
+          capacity: Number(v.capacity) || 0,
+        }));
+        setVenues(vlist);
       } catch (e) {
         console.debug("Skip venues refresh after delete", e);
       }
@@ -278,7 +297,14 @@ const Events = () => {
         setEvents((prev) => prev.map((ev) => (ev.id === editingEvent.id ? (updated as unknown as EventItem) : ev)));
         try {
           const vs = await fetchVenues();
-          setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+          const vlist = (vs as Venue[]).map((v) => ({
+            id: String(v.id),
+            name: String(v.name),
+            area: v.area as VenueArea,
+            status: v.status,
+            capacity: Number(v.capacity) || 0,
+          }));
+          setVenues(vlist);
         } catch (e) {
           console.debug("Skip venues refresh after update", e);
         }
@@ -300,7 +326,14 @@ const Events = () => {
         setEvents((prev) => [...prev, created as unknown as EventItem]);
         try {
           const vs = await fetchVenues();
-          setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+          const vlist = (vs as Venue[]).map((v) => ({
+            id: String(v.id),
+            name: String(v.name),
+            area: v.area as VenueArea,
+            status: v.status,
+            capacity: Number(v.capacity) || 0,
+          }));
+          setVenues(vlist);
         } catch (e) {
           console.debug("Skip venues refresh after create", e);
         }
@@ -683,14 +716,14 @@ const Events = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Type d'événement</label>
-                <select
-                  aria-label="Sélectionner le type d'événement"
-                  className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
-                  value={formEventType}
-                  onChange={(e) => setFormEventType(e.target.value as EventType)}
-                  required
-                >
+              <label className="block text-sm font-medium mb-1">Type d'événement</label>
+              <select
+                aria-label="Sélectionner le type d'événement"
+                className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
+                value={formEventType}
+                onChange={(e) => setFormEventType(e.target.value as EventType)}
+                required
+              >
                   <option value="">Choisir...</option>
                   <option value="mariage">Mariage</option>
                   <option value="celebration_religieuse">Célébration religieuse</option>
@@ -698,63 +731,80 @@ const Events = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Nombre de places</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={formCapacity}
-                  onChange={(e) => setFormCapacity(e.target.value)}
-                  placeholder="Ex: 150"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Heure début</label>
-                <Input
-                  type="time"
-                  value={formStartTime}
-                  onChange={(e) => setFormStartTime(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Heure fin</label>
-                <Input
-                  type="time"
-                  value={formEndTime}
-                  onChange={(e) => setFormEndTime(e.target.value)}
-                />
-              </div>
+              <label className="block text-sm font-medium mb-1">Nombre de places</label>
+              <Input
+                type="number"
+                min={1}
+                max={selectedVenue?.capacity ?? undefined}
+                value={formCapacity}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormCapacity(val);
+                  const n = Number(val || 0);
+                  if (selectedVenue && Number.isFinite(n) && n > (selectedVenue.capacity || 0)) {
+                    setFormError(`La salle ne peut contenir que ${selectedVenue.capacity} places`);
+                  } else if (n <= 0) {
+                    setFormError("Le nombre de places doit être supérieur à 0");
+                  } else {
+                    setFormError("");
+                  }
+                }}
+                placeholder="Ex: 150"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Heure début</label>
+              <Input
+                type="time"
+                value={formStartTime}
+                onChange={(e) => setFormStartTime(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Heure fin</label>
+              <Input
+                type="time"
+                value={formEndTime}
+                onChange={(e) => setFormEndTime(e.target.value)}
+                required
+              />
+            </div>
               
               <div>
-                <label className="block text-sm font-medium mb-1">Budget</label>
-                <Input
-                  value={formBudget}
-                  onChange={(e) => setFormBudget(e.target.value)}
-                  placeholder="Ex: 15 000€"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Lieu
-                </label>
-                <select
-                  aria-label="Sélectionner une salle"
-                  className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
-                  value={formVenue}
-                  onChange={(e) => {
-                    setFormVenue(e.target.value);
-                    setFormAreaChoice("");
-                    setFormMariageInterior("");
-                    setFormMariageExterior("");
-                  }}
-                >
-                  <option value="">Choisir une salle...</option>
-                  {availableVenues.map((venue) => (
-                    <option key={venue.id} value={venue.id}>
-                      {venue.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <label className="block text-sm font-medium mb-1">Budget</label>
+              <Input
+                value={formBudget}
+                onChange={(e) => setFormBudget(e.target.value)}
+                placeholder="Ex: 15 000€"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Lieu
+              </label>
+              <select
+                aria-label="Sélectionner une salle"
+                className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
+                value={formVenue}
+                onChange={(e) => {
+                  setFormVenue(e.target.value);
+                  setFormAreaChoice("");
+                  setFormMariageInterior("");
+                  setFormMariageExterior("");
+                }}
+                required
+              >
+                <option value="">Choisir une salle...</option>
+                {availableVenues.map((venue) => (
+                  <option key={venue.id} value={venue.id}>
+                    {venue.name}
+                  </option>
+                ))}
+              </select>
+            </div>
               {formEventType && (formEventType === "mariage" || formEventType === "cocktail" || formEventType === "celebration_religieuse") && formVenue && (
                 <div>
                   <label className="block text-sm font-medium mb-1">Zone</label>

@@ -32,6 +32,7 @@ const EventStaff = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("tous");
   const [roles, setRoles] = useState<string[]>([]);
+  const [eventStatus, setEventStatus] = useState<string | undefined>(undefined);
 
   const task = useMemo(() => new URLSearchParams(location.search).get("task") || "", [location.search]);
   const taskLabel = useMemo(() => {
@@ -58,6 +59,10 @@ const EventStaff = () => {
   }, [task, tasks]);
 
   const selectedTask = useMemo(() => tasks.find((t) => t.slug === task) || null, [task, tasks]);
+  const isAssignForbidden = useMemo(() => {
+    const s = eventStatus;
+    return s === "termine" || s === "annuler" || s === "echoue";
+  }, [eventStatus]);
 
   useEffect(() => {
     (async () => {
@@ -130,6 +135,7 @@ const EventStaff = () => {
       try {
         const ev = await getEvent(id);
         setEventTitle(ev.title || "Événement");
+        setEventStatus((ev as { status?: string }).status);
       } catch {
         setEventTitle("Événement");
       }
@@ -177,6 +183,7 @@ const EventStaff = () => {
   }, [task, availableStaff, assignedStaff, taskAssignedStaff, searchTerm, roleFilter, blockedIds]);
 
   const handleAssign = async (member: ApiStaffMember) => {
+    if (isAssignForbidden) return;
     if (task) {
       if (blockedIds.has(member.id)) return;
       if (!id || !selectedTask) return;
@@ -223,6 +230,7 @@ const EventStaff = () => {
         </Button>
       </div>
 
+      {!isAssignForbidden && (
       <Card>
         <CardHeader>
           <h2 className="text-xl font-semibold text-foreground">Employés disponibles</h2>
@@ -296,8 +304,9 @@ const EventStaff = () => {
           )}
         </CardContent>
       </Card>
+      )}
 
-      {taskLabel && assignedStaff.length === 0 && (
+      {taskLabel && assignedStaff.length === 0 && !isAssignForbidden && (
         <Card>
           <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="text-sm text-muted-foreground">

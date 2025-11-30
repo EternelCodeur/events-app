@@ -44,6 +44,9 @@ class ProviderController extends Controller
         if (($user->role ?? 'admin') !== 'superadmin' && (int)$event->entreprise_id !== (int)$user->entreprise_id) {
             abort(403, 'Forbidden');
         }
+        if (in_array((string) $event->status, ['termine', 'annuler', 'echoue'], true)) {
+            abort(422, "Impossible d'ajouter un prestataire pour un événement terminé, annulé ou échoué");
+        }
         $data = $request->validate([
             'type' => ['sometimes', 'nullable', 'string', 'max:191'],
             'designation' => ['required', 'string', 'max:191'],
@@ -90,6 +93,10 @@ class ProviderController extends Controller
         $user = $request->user();
         if (($user->role ?? 'admin') !== 'superadmin' && (int)$provider->entreprise_id !== (int)$user->entreprise_id) {
             abort(403, 'Forbidden');
+        }
+        $evStatus = optional($provider->event)->status;
+        if (in_array((string) $evStatus, ['termine', 'annuler', 'echoue'], true)) {
+            abort(422, "Impossible de modifier un prestataire pour un événement terminé, annulé ou échoué");
         }
         $data = $request->validate([
             'type' => ['sometimes', 'nullable', 'string', 'max:191'],

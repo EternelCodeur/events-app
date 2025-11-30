@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate, useParams } from "react-router-dom";
+import { getEvent } from "@/lib/events";
 import { Search, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -64,11 +65,29 @@ const EventTables = () => {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assignTable, setAssignTable] = useState<TableItem | null>(null);
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+  const [eventStatus, setEventStatus] = useState<string | undefined>(undefined);
 
   const [formName, setFormName] = useState("");
   const [formCapacity, setFormCapacity] = useState("");
 
   const event = mockEvents.find((e) => e.id === id);
+
+  useEffect(() => {
+    (async () => {
+      if (!id) return;
+      try {
+        const ev = await getEvent(id);
+        setEventStatus((ev as { status?: string }).status);
+      } catch {
+        setEventStatus(undefined);
+      }
+    })();
+  }, [id]);
+
+  const isAssignForbidden = useMemo(() => {
+    const s = eventStatus;
+    return s === "termine" || s === "annuler" || s === "echoue";
+  }, [eventStatus]);
 
   useEffect(() => {
     if (!id) return;
@@ -215,13 +234,15 @@ const EventTables = () => {
             <div className="text-sm text-muted-foreground">
               Aucun personnel n'est encore assigné à cet événement. Assignez d'abord des personnes pour pouvoir les affecter aux tables.
             </div>
-            <Button
-              type="button"
-              className="bg-primary hover:bg-primary-hover text-white"
-              onClick={() => navigate(`/admin/events/${id}/staff`)}
-            >
-              Assigner du personnel à l'événement
-            </Button>
+            {!isAssignForbidden && (
+              <Button
+                type="button"
+                className="bg-primary hover:bg-primary-hover text-white"
+                onClick={() => navigate(`/admin/events/${id}/staff`)}
+              >
+                Assigner du personnel à l'événement
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
@@ -355,13 +376,15 @@ const EventTables = () => {
           {eventAssignedStaff.length === 0 ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Aucun personnel n'est encore assigné à l'événement.</p>
-              <Button
-                type="button"
-                className="bg-primary hover:bg-primary-hover text-white"
-                onClick={() => navigate(`/admin/events/${id}/staff`)}
-              >
-                Assigner du personnel à l'événement
-              </Button>
+              {!isAssignForbidden && (
+                <Button
+                  type="button"
+                  className="bg-primary hover:bg-primary-hover text-white"
+                  onClick={() => navigate(`/admin/events/${id}/staff`)}
+                >
+                  Assigner du personnel à l'événement
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-2 max-h-80 overflow-auto pr-1">

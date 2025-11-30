@@ -68,5 +68,7 @@ export async function updateTask(id: string, payload: UpdateTaskPayload): Promis
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  await request<void>(`/api/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+  await request<void>(`/api/tasks/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }

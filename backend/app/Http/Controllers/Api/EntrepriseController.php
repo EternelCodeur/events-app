@@ -24,14 +24,14 @@ class EntrepriseController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => [
-                'nullable',
+                'required',
                 'email',
                 'max:191',
                 Rule::unique('entreprises', 'email'),
                 Rule::unique('users', 'email'),
             ],
-            'phone' => ['nullable', 'string', 'max:255'],
-            'adminName' => ['nullable', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:255'],
+            'adminName' => ['required', 'string', 'max:255'],
         ]);
 
         $slugBase = Str::slug($data['name']);

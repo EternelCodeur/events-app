@@ -50,6 +50,10 @@ class EventTaskAssignmentController extends Controller
             'staffId' => ['required', 'integer'],
         ]);
 
+        if (in_array((string)$event->status, ['termine', 'annuler', 'echoue'], true)) {
+            abort(422, "Impossible d'assigner du personnel à un événement terminé, annulé ou échoué");
+        }
+
         $staff = Staff::findOrFail((int) $data['staffId']);
         if (($user->role ?? 'admin') !== 'superadmin' && (int)$staff->entreprise_id !== (int)$user->entreprise_id) {
             abort(403, 'Forbidden');
