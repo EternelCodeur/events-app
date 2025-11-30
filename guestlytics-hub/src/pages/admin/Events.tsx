@@ -603,7 +603,14 @@ const Events = () => {
                           setEvents((prev) => prev.map((ev) => (ev.id === selectedEvent.id ? (updated as unknown as EventItem) : ev)));
                           try {
                             const vs = await fetchVenues();
-                            setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+                            const vlist = (vs as Venue[]).map((v) => ({
+                              id: String(v.id),
+                              name: String(v.name),
+                              area: v.area as VenueArea,
+                              status: v.status,
+                              capacity: Number(v.capacity) || 0,
+                            }));
+                            setVenues(vlist);
                           } catch (e) {
                             console.debug("Skip venues refresh after confirm", e);
                           }
@@ -627,7 +634,14 @@ const Events = () => {
                           setEvents((prev) => prev.map((ev) => (ev.id === selectedEvent.id ? (updated as unknown as EventItem) : ev)));
                           try {
                             const vs = await fetchVenues();
-                            setVenues(vs as unknown as { id: string; name: string; area: VenueArea; status: "vide" | "en_attente" | "occupe" }[]);
+                            const vlist = (vs as Venue[]).map((v) => ({
+                              id: String(v.id),
+                              name: String(v.name),
+                              area: v.area as VenueArea,
+                              status: v.status,
+                              capacity: Number(v.capacity) || 0,
+                            }));
+                            setVenues(vlist);
                           } catch (e) {
                             console.debug("Skip venues refresh after cancel", e);
                           }

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\EventTaskController;
 use App\Http\Controllers\Api\EventAssignmentController;
 use App\Http\Controllers\Api\EventTaskAssignmentController;
+use App\Http\Controllers\Api\UsersController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -46,4 +47,9 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
     Route::get('events/{event}/tasks/{task}/assignments', [EventTaskAssignmentController::class, 'index']);
     Route::post('events/{event}/tasks/{task}/assignments', [EventTaskAssignmentController::class, 'store']);
     Route::delete('events/{event}/tasks/{task}/assignments/{staff}', [EventTaskAssignmentController::class, 'destroy']);
+});
+
+// Users management (admins of entreprise and superadmins)
+Route::middleware(['jwt', 'role:admin,superadmin'])->group(function () {
+    Route::apiResource('users', UsersController::class);
 });
