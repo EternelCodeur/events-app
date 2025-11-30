@@ -51,12 +51,14 @@ const mockEvents: Event[] = [
 const statusColors = {
   confirme: "bg-success hover:bg-success/90",
   en_attente: "bg-accent hover:bg-accent/90",
+  en_cours: "bg-primary hover:bg-primary/90",
   termine: "bg-muted hover:bg-muted/90",
 };
 
 const statusLabels = {
   confirme: "Confirmé",
   en_attente: "En attente",
+  en_cours: "En cours",
   termine: "Terminé",
 };
 

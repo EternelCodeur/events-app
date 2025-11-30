@@ -66,6 +66,12 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
       path: "/admin/staff",
       icon: UserCheck,
     },
+    {
+      value: "users",
+      label: "Gestion des utilisateurs",
+      path: "/admin/users",
+      icon: User,
+    },
   ];
 
   const superAdminTabs = [

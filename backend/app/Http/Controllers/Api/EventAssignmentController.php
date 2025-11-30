@@ -29,6 +29,48 @@ class EventAssignmentController extends Controller
         }
 
         $staff = $query->get();
+        $ids = $staff->pluck('id');
+        if ($ids->count() > 0) {
+            $nowDate = date('Y-m-d');
+            $nowTime = date('H:i');
+            $activeIds = DB::table('event_staff_assignments as esa')
+                ->join('events as ev', 'ev.id', '=', 'esa.event_id')
+                ->whereIn('esa.staff_id', $ids)
+                ->where(function ($w) use ($nowDate, $nowTime) {
+                    $w->where(function ($q1) use ($nowDate) {
+                        $q1->where('ev.status', 'en_cours')
+                           ->whereDate('ev.date', '=', $nowDate);
+                    })->orWhere(function ($q2) use ($nowDate, $nowTime) {
+                        $q2->where('ev.status', 'confirme')
+                           ->whereDate('ev.date', '=', $nowDate)
+                           ->where(function ($q) use ($nowTime) {
+                               $q->where(function ($qq) use ($nowTime) {
+                                   $qq->whereNotNull('ev.start_time')
+                                      ->whereNotNull('ev.end_time')
+                                      ->where('ev.start_time', '<=', $nowTime)
+                                      ->where('ev.end_time', '>', $nowTime);
+                               })->orWhere(function ($qq) use ($nowTime) {
+                                   $qq->whereNull('ev.start_time')
+                                      ->whereNotNull('ev.end_time')
+                                      ->where('ev.end_time', '>', $nowTime);
+                               })->orWhere(function ($qq) use ($nowTime) {
+                                   $qq->whereNotNull('ev.start_time')
+                                      ->whereNull('ev.end_time')
+                                      ->where('ev.start_time', '<=', $nowTime);
+                               })->orWhere(function ($qq) {
+                                   $qq->whereNull('ev.start_time')
+                                      ->whereNull('ev.end_time');
+                               });
+                           });
+                    });
+                })
+                ->distinct()
+                ->pluck('esa.staff_id')
+                ->toArray();
+            foreach ($staff as $s) {
+                $s->status = in_array($s->id, $activeIds, true) ? 'active' : 'inactive';
+            }
+        }
         return StaffResource::collection($staff);
     }
 
@@ -48,6 +90,33 @@ class EventAssignmentController extends Controller
             abort(403, 'Forbidden');
         }
 
+        // Prevent time conflicts: same date and overlapping time with another non-cancelled event
+        $date = (string) $event->date;
+        $start = $event->start_time ? substr((string) $event->start_time, 0, 5) : null;
+        $end = $event->end_time ? substr((string) $event->end_time, 0, 5) : null;
+        $conflict = DB::table('event_staff_assignments as esa')
+            ->join('events as ev', 'ev.id', '=', 'esa.event_id')
+            ->where('esa.staff_id', $staff->id)
+            ->where('ev.id', '<>', $event->id)
+            ->whereIn('ev.status', ['en_attente', 'confirme'])
+            ->whereDate('ev.date', '=', $date)
+            ->where(function ($q) use ($start, $end) {
+                if ($start && $end) {
+                    $q->whereNull('ev.start_time')
+                      ->orWhereNull('ev.end_time')
+                      ->orWhere(function ($qq) use ($start, $end) {
+                          $qq->where('ev.start_time', '<', $end)
+                             ->where('ev.end_time', '>', $start);
+                      });
+                } else {
+                    $q->whereRaw('1 = 1');
+                }
+            })
+            ->exists();
+        if ($conflict) {
+            abort(422, "Cet employé est déjà assigné à un autre événement sur le même créneau");
+        }
+
         $exists = DB::table('event_staff_assignments')
             ->where('event_id', $event->id)
             ->where('staff_id', $staff->id)
@@ -63,6 +132,46 @@ class EventAssignmentController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        $nowDate = date('Y-m-d');
+        $nowTime = date('H:i');
+        $hasActiveNow = DB::table('event_staff_assignments as esa')
+            ->join('events as ev', 'ev.id', '=', 'esa.event_id')
+            ->where('esa.staff_id', $staff->id)
+            ->where(function ($w) use ($nowDate, $nowTime) {
+                $w->where(function ($q1) use ($nowDate) {
+                    $q1->where('ev.status', 'en_cours')
+                       ->whereDate('ev.date', '=', $nowDate);
+                })->orWhere(function ($q2) use ($nowDate, $nowTime) {
+                    $q2->where('ev.status', 'confirme')
+                       ->whereDate('ev.date', '=', $nowDate)
+                       ->where(function ($q) use ($nowTime) {
+                           $q->where(function ($qq) use ($nowTime) {
+                               $qq->whereNotNull('ev.start_time')
+                                  ->whereNotNull('ev.end_time')
+                                  ->where('ev.start_time', '<=', $nowTime)
+                                  ->where('ev.end_time', '>', $nowTime);
+                           })->orWhere(function ($qq) use ($nowTime) {
+                               $qq->whereNull('ev.start_time')
+                                  ->whereNotNull('ev.end_time')
+                                  ->where('ev.end_time', '>', $nowTime);
+                           })->orWhere(function ($qq) use ($nowTime) {
+                               $qq->whereNotNull('ev.start_time')
+                                  ->whereNull('ev.end_time')
+                                  ->where('ev.start_time', '<=', $nowTime);
+                           })->orWhere(function ($qq) {
+                               $qq->whereNull('ev.start_time')
+                                  ->whereNull('ev.end_time');
+                           });
+                       });
+                });
+            })
+            ->exists();
+        DB::table('staff')->where('id', $staff->id)->update([
+            'status' => $hasActiveNow ? 'active' : 'inactive',
+            'updated_at' => now(),
+        ]);
+        $staff->status = $hasActiveNow ? 'active' : 'inactive';
+        $staff->updated_at = now();
 
         return new StaffResource($staff);
     }
@@ -80,6 +189,45 @@ class EventAssignmentController extends Controller
             ->where('event_id', $event->id)
             ->where('staff_id', $staff->id)
             ->delete();
+
+        $nowDate = date('Y-m-d');
+        $nowTime = date('H:i');
+        $hasActive = DB::table('event_staff_assignments as esa')
+            ->join('events as ev', 'ev.id', '=', 'esa.event_id')
+            ->where('esa.staff_id', $staff->id)
+            ->where(function ($w) use ($nowDate, $nowTime) {
+                $w->where(function ($q1) use ($nowDate) {
+                    $q1->where('ev.status', 'en_cours')
+                       ->whereDate('ev.date', '=', $nowDate);
+                })->orWhere(function ($q2) use ($nowDate, $nowTime) {
+                    $q2->where('ev.status', 'confirme')
+                       ->whereDate('ev.date', '=', $nowDate)
+                       ->where(function ($q) use ($nowTime) {
+                           $q->where(function ($qq) use ($nowTime) {
+                               $qq->whereNotNull('ev.start_time')
+                                  ->whereNotNull('ev.end_time')
+                                  ->where('ev.start_time', '<=', $nowTime)
+                                  ->where('ev.end_time', '>', $nowTime);
+                           })->orWhere(function ($qq) use ($nowTime) {
+                               $qq->whereNull('ev.start_time')
+                                  ->whereNotNull('ev.end_time')
+                                  ->where('ev.end_time', '>', $nowTime);
+                           })->orWhere(function ($qq) use ($nowTime) {
+                               $qq->whereNotNull('ev.start_time')
+                                  ->whereNull('ev.end_time')
+                                  ->where('ev.start_time', '<=', $nowTime);
+                           })->orWhere(function ($qq) {
+                               $qq->whereNull('ev.start_time')
+                                  ->whereNull('ev.end_time');
+                           });
+                       });
+                });
+            })
+            ->exists();
+        DB::table('staff')->where('id', $staff->id)->update([
+            'status' => $hasActive ? 'active' : 'inactive',
+            'updated_at' => now(),
+        ]);
 
         return response()->noContent();
     }

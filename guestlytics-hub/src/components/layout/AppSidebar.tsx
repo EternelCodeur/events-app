@@ -24,9 +24,6 @@ const adminMenuItems = [
   { icon: MapPin, label: "Salles", path: "/admin/venues" },
   { icon: Users, label: "Invités", path: "/admin/guests" },
   { icon: UserCheck, label: "Personnel", path: "/admin/staff" },
-  { icon: Package, label: "Logistique", path: "/admin/logistics" },
-  { icon: DollarSign, label: "Finance", path: "/admin/finance" },
-  { icon: Settings, label: "Paramètres", path: "/admin/settings" },
 ];
 
 const superAdminMenuItems = [

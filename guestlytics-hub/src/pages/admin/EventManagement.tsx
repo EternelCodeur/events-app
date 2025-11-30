@@ -564,7 +564,7 @@ const EventManagement = () => {
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-foreground">Prestataires</h2>
                 <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" onClick={() => printProviders("all", true)} disabled={isPrinting}>PDF</Button>
+                  <Button type="button" variant="outline" onClick={() => printProviders("all", true)} disabled={isPrinting}>Imprimer</Button>
                   <Button type="button" variant="outline" onClick={() => exportProvidersExcel("all")}>Excel</Button>
                   <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={openCreateProvider}>Ajouter</Button>
                 </div>

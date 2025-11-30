@@ -23,14 +23,19 @@ class VenueController extends Controller
         $today = date('Y-m-d');
         $now = date('H:i');
         foreach ($venues as $venue) {
-            $nowConfirmed = Event::where('venue_id', $venue->id)
-                ->where('status', 'confirme')
+            $nowOngoing = Event::where('venue_id', $venue->id)
                 ->whereDate('date', '=', $today)
-                ->where(function ($q) use ($now) {
-                    $q->whereNull('start_time')->orWhere('start_time', '<=', $now);
-                })
-                ->where(function ($q) use ($now) {
-                    $q->whereNull('end_time')->orWhere('end_time', '>', $now);
+                ->where(function ($s) use ($now) {
+                    $s->where('status', 'en_cours')
+                      ->orWhere(function ($qq) use ($now) {
+                          $qq->where('status', 'confirme')
+                             ->where(function ($q) use ($now) {
+                                 $q->whereNull('start_time')->orWhere('start_time', '<=', $now);
+                             })
+                             ->where(function ($q) use ($now) {
+                                 $q->whereNull('end_time')->orWhere('end_time', '>', $now);
+                             });
+                      });
                 })
                 ->exists();
             $hasUpcoming = Event::where('venue_id', $venue->id)
@@ -45,7 +50,7 @@ class VenueController extends Controller
                       });
                 })
                 ->exists();
-            $newStatus = $nowConfirmed ? 'occupe' : ($hasUpcoming ? 'en_attente' : 'vide');
+            $newStatus = $nowOngoing ? 'occupe' : ($hasUpcoming ? 'en_attente' : 'vide');
             if ($venue->status !== $newStatus) {
                 $venue->status = $newStatus;
                 $venue->save();

@@ -20,7 +20,7 @@ import {
 } from "@/lib/events";
 import { getVenues as fetchVenues } from "@/lib/venues";
 
-type EventStatus = "en_attente" | "confirme" | "annuler";
+type EventStatus = "en_attente" | "confirme" | "annuler" | "en_cours" | "termine";
 type VenueArea = "interieur" | "exterieur" | "les_deux";
 type EventType = "mariage" | "celebration_religieuse" | "cocktail";
 
@@ -46,6 +46,8 @@ interface EventItem {
 const statusColors: Record<EventStatus | "all", string> = {
   en_attente: "bg-accent hover:bg-accent/90",
   confirme: "bg-success hover:bg-success/90",
+  en_cours: "bg-primary hover:bg-primary/90",
+  termine: "bg-muted hover:bg-muted/90",
   annuler: "bg-destructive hover:bg-destructive/90",
   all: "bg-muted",
 };
@@ -53,6 +55,8 @@ const statusColors: Record<EventStatus | "all", string> = {
 const statusLabels: Record<EventStatus, string> = {
   en_attente: "En attente",
   confirme: "Confirmé",
+  en_cours: "En cours",
+  termine: "Terminé",
   annuler: "Annulé",
 };
 
@@ -365,7 +369,9 @@ const Events = () => {
               >
                 <option value="all">Tous les statuts</option>
                 <option value="confirme">Confirmé</option>
+                <option value="en_cours">En cours</option>
                 <option value="en_attente">En attente</option>
+                <option value="termine">Terminé</option>
                 <option value="annuler">Annulé</option>
               </select>
             </div>

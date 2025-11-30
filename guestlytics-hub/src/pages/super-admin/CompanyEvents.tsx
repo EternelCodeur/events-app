@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getCompanies, type Company } from "@/lib/api";
 
-type EventStatus = "confirme" | "en_attente" | "termine" | "annule";
+type EventStatus = "en_attente" | "confirme" | "annuler" | "en_cours" | "termine";
 
 type EventItem = {
   id: string;
@@ -20,17 +20,19 @@ type EventItem = {
 };
 
 const statusColors: Record<EventStatus, string> = {
-  confirme: "bg-success hover:bg-success/90",
   en_attente: "bg-accent hover:bg-accent/90",
+  confirme: "bg-success hover:bg-success/90",
+  en_cours: "bg-primary hover:bg-primary/90",
   termine: "bg-muted hover:bg-muted/90",
-  annule: "bg-destructive hover:bg-destructive/90",
+  annuler: "bg-destructive hover:bg-destructive/90",
 };
 
 const statusLabels: Record<EventStatus, string> = {
-  confirme: "Confirmé",
   en_attente: "En attente",
+  confirme: "Confirmé",
+  en_cours: "En cours",
   termine: "Terminé",
-  annule: "Annulé",
+  annuler: "Annulé",
 };
 
 const CompanyEvents = () => {

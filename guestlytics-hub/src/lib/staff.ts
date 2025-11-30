@@ -68,6 +68,11 @@ export async function getStaff(): Promise<StaffMember[]> {
   return request<StaffMember[]>(`${API_BASE}`, { method: "GET" });
 }
 
+export async function getAvailableStaffForEvent(eventId: string): Promise<StaffMember[]> {
+  const url = `${API_BASE}?eventId=${encodeURIComponent(eventId)}`;
+  return request<StaffMember[]>(url, { method: "GET" });
+}
+
 export async function createStaff(payload: CreateStaffPayload): Promise<StaffMember> {
   return request<StaffMember>(`${API_BASE}`, {
     method: "POST",

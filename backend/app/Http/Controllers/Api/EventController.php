@@ -9,6 +9,7 @@ use App\Models\Entreprise;
 use App\Models\Venue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class EventController extends Controller
 {
@@ -23,7 +24,39 @@ class EventController extends Controller
                 $query->where('entreprise_id', (int) $request->integer('entrepriseId'));
             }
         }
-        return EventResource::collection($query->latest()->get());
+        $events = $query->latest()->get();
+        $today = date('Y-m-d');
+        $now = date('H:i');
+        foreach ($events as $ev) {
+            $endStr = $ev->end_time ? substr((string) $ev->end_time, 0, 5) : null;
+            $startStr = $ev->start_time ? substr((string) $ev->start_time, 0, 5) : null;
+            $shouldFailed = $ev->status === 'en_attente' && ((((string)$ev->date) < $today) || (((string)$ev->date) === $today && $endStr && $endStr <= $now));
+            if ($shouldFailed) {
+                $ev->status = 'echoue';
+                $ev->save();
+                continue;
+            }
+            $shouldTerminate = in_array($ev->status, ['confirme', 'en_cours'], true)
+                && (((string) $ev->date) < $today || (((string) $ev->date) === $today && $endStr && $endStr <= $now));
+            if ($shouldTerminate) {
+                $ev->status = 'termine';
+                $ev->save();
+                continue;
+            }
+            $shouldOngoing = $ev->status === 'confirme'
+                && ((string) $ev->date) === $today
+                && (
+                    ($startStr && $endStr && $startStr <= $now && $endStr > $now)
+                    || (is_null($ev->start_time) && is_null($ev->end_time))
+                    || (is_null($ev->start_time) && $endStr && $endStr > $now)
+                    || ($startStr && is_null($ev->end_time) && $startStr <= $now)
+                );
+            if ($shouldOngoing) {
+                $ev->status = 'en_cours';
+                $ev->save();
+            }
+        }
+        return EventResource::collection($events);
     }
 
     public function store(Request $request)
@@ -48,7 +81,7 @@ class EventController extends Controller
             'areaChoice' => ['nullable', 'in:interieur,exterieur,les_deux'],
             'mariageInteriorSubtype' => ['nullable', 'in:civil,coutumier'],
             'mariageExteriorSubtype' => ['nullable', 'in:civil,coutumier'],
-            'status' => ['sometimes', 'nullable', 'in:en_attente,confirme,annuler'],
+            'status' => ['sometimes', 'nullable', 'in:en_attente,confirme,annuler,en_cours,termine,echoue'],
             'entrepriseId' => ['sometimes', 'nullable', 'integer', 'exists:entreprises,id'],
         ]);
 
@@ -166,6 +199,48 @@ class EventController extends Controller
             }
         }
 
+        $staffIds = DB::table('event_staff_assignments')->where('event_id', $event->id)->pluck('staff_id');
+        $nowDate = date('Y-m-d');
+        $nowTime = date('H:i');
+        foreach ($staffIds as $sid) {
+            $hasActive = DB::table('event_staff_assignments as esa')
+                ->join('events as ev', 'ev.id', '=', 'esa.event_id')
+                ->where('esa.staff_id', $sid)
+                ->where(function ($w) use ($nowDate, $nowTime) {
+                    $w->where(function ($q1) use ($nowDate) {
+                        $q1->where('ev.status', 'en_cours')
+                           ->whereDate('ev.date', '=', $nowDate);
+                    })->orWhere(function ($q2) use ($nowDate, $nowTime) {
+                        $q2->where('ev.status', 'confirme')
+                           ->whereDate('ev.date', '=', $nowDate)
+                           ->where(function ($q) use ($nowTime) {
+                               $q->where(function ($qq) use ($nowTime) {
+                                   $qq->whereNotNull('ev.start_time')
+                                      ->whereNotNull('ev.end_time')
+                                      ->where('ev.start_time', '<=', $nowTime)
+                                      ->where('ev.end_time', '>', $nowTime);
+                               })->orWhere(function ($qq) use ($nowTime) {
+                                   $qq->whereNull('ev.start_time')
+                                      ->whereNotNull('ev.end_time')
+                                      ->where('ev.end_time', '>', $nowTime);
+                               })->orWhere(function ($qq) use ($nowTime) {
+                                   $qq->whereNotNull('ev.start_time')
+                                      ->whereNull('ev.end_time')
+                                      ->where('ev.start_time', '<=', $nowTime);
+                               })->orWhere(function ($qq) {
+                                   $qq->whereNull('ev.start_time')
+                                      ->whereNull('ev.end_time');
+                               });
+                           });
+                    });
+                })
+                ->exists();
+            DB::table('staff')->where('id', $sid)->update([
+                'status' => $hasActive ? 'active' : 'inactive',
+                'updated_at' => now(),
+            ]);
+        }
+
         return new EventResource($event);
     }
 
@@ -204,7 +279,7 @@ class EventController extends Controller
             'areaChoice' => ['sometimes', 'nullable', 'in:interieur,exterieur,les_deux'],
             'mariageInteriorSubtype' => ['sometimes', 'nullable', 'in:civil,coutumier'],
             'mariageExteriorSubtype' => ['sometimes', 'nullable', 'in:civil,coutumier'],
-            'status' => ['sometimes', 'nullable', 'in:en_attente,confirme,annuler'],
+            'status' => ['sometimes', 'nullable', 'in:en_attente,confirme,annuler,en_cours,termine,echoue'],
         ]);
 
         $oldTitle = $event->getOriginal('title');
@@ -336,10 +411,12 @@ class EventController extends Controller
                         ->where('status', 'confirme')
                         ->whereDate('date', '=', $today)
                         ->where(function ($q) use ($now) {
-                            $q->whereNull('start_time')->orWhere('start_time', '<=', $now);
+                            $q->whereNull('start_time')
+                              ->orWhere('start_time', '<=', $now);
                         })
                         ->where(function ($q) use ($now) {
-                            $q->whereNull('end_time')->orWhere('end_time', '>', $now);
+                            $q->whereNull('end_time')
+                              ->orWhere('end_time', '>', $now);
                         })
                         ->exists();
                     $hasUpcoming = Event::where('venue_id', $oldVenue->id)
@@ -349,7 +426,8 @@ class EventController extends Controller
                               ->orWhere(function ($qq) use ($today, $now) {
                                   $qq->where('date', '=', $today)
                                      ->where(function ($qq2) use ($now) {
-                                         $qq2->whereNull('start_time')->orWhere('start_time', '>', $now);
+                                         $qq2->whereNull('start_time')
+                                             ->orWhere('start_time', '>', $now);
                                      });
                               });
                         })
@@ -358,6 +436,48 @@ class EventController extends Controller
                     $oldVenue->save();
                 }
             }
+        }
+
+        $assignedStaffIds = DB::table('event_staff_assignments')->where('event_id', $event->id)->pluck('staff_id');
+        $nowDate = date('Y-m-d');
+        $nowTime = date('H:i');
+        foreach ($assignedStaffIds as $sid) {
+            $hasActive = DB::table('event_staff_assignments as esa')
+                ->join('events as ev', 'ev.id', '=', 'esa.event_id')
+                ->where('esa.staff_id', $sid)
+                ->where(function ($w) use ($nowDate, $nowTime) {
+                    $w->where(function ($q1) use ($nowDate) {
+                        $q1->where('ev.status', 'en_cours')
+                           ->whereDate('ev.date', '=', $nowDate);
+                    })->orWhere(function ($q2) use ($nowDate, $nowTime) {
+                        $q2->where('ev.status', 'confirme')
+                           ->whereDate('ev.date', '=', $nowDate)
+                           ->where(function ($q) use ($nowTime) {
+                               $q->where(function ($qq) use ($nowTime) {
+                                   $qq->whereNotNull('ev.start_time')
+                                      ->whereNotNull('ev.end_time')
+                                      ->where('ev.start_time', '<=', $nowTime)
+                                      ->where('ev.end_time', '>', $nowTime);
+                               })->orWhere(function ($qq) use ($nowTime) {
+                                   $qq->whereNull('ev.start_time')
+                                      ->whereNotNull('ev.end_time')
+                                      ->where('ev.end_time', '>', $nowTime);
+                               })->orWhere(function ($qq) use ($nowTime) {
+                                   $qq->whereNotNull('ev.start_time')
+                                      ->whereNull('ev.end_time')
+                                      ->where('ev.start_time', '<=', $nowTime);
+                               })->orWhere(function ($qq) {
+                                   $qq->whereNull('ev.start_time')
+                                      ->whereNull('ev.end_time');
+                               });
+                           });
+                    });
+                })
+                ->exists();
+            DB::table('staff')->where('id', $sid)->update([
+                'status' => $hasActive ? 'active' : 'inactive',
+                'updated_at' => now(),
+            ]);
         }
 
         return new EventResource($event);
@@ -375,6 +495,8 @@ class EventController extends Controller
         $base = 'entreprises/' . $slug . '/events/';
         Storage::disk('local')->deleteDirectory($base . $event->title);
         Storage::disk('local')->deleteDirectory($base . $event->id);
+
+        $staffIds = DB::table('event_staff_assignments')->where('event_id', $event->id)->pluck('staff_id');
 
         // Recalculate venue status after deletion (time-aware)
         $venueId = $event->venue_id;
@@ -410,6 +532,40 @@ class EventController extends Controller
                 $venue->save();
             }
         }
+        $nowDate = date('Y-m-d');
+        $nowTime = date('H:i');
+        foreach ($staffIds as $sid) {
+            $hasActive = DB::table('event_staff_assignments as esa')
+                ->join('events as ev', 'ev.id', '=', 'esa.event_id')
+                ->where('esa.staff_id', $sid)
+                ->where('ev.status', 'confirme')
+                ->whereDate('ev.date', '=', $nowDate)
+                ->where(function ($q) use ($nowTime) {
+                    $q->where(function ($qq) use ($nowTime) {
+                        $qq->whereNotNull('ev.start_time')
+                           ->whereNotNull('ev.end_time')
+                           ->where('ev.start_time', '<=', $nowTime)
+                           ->where('ev.end_time', '>', $nowTime);
+                    })->orWhere(function ($qq) use ($nowTime) {
+                        $qq->whereNull('ev.start_time')
+                           ->whereNotNull('ev.end_time')
+                           ->where('ev.end_time', '>', $nowTime);
+                    })->orWhere(function ($qq) use ($nowTime) {
+                        $qq->whereNotNull('ev.start_time')
+                           ->whereNull('ev.end_time')
+                           ->where('ev.start_time', '<=', $nowTime);
+                    })->orWhere(function ($qq) {
+                        $qq->whereNull('ev.start_time')
+                           ->whereNull('ev.end_time');
+                    });
+                })
+                ->exists();
+            DB::table('staff')->where('id', $sid)->update([
+                'status' => $hasActive ? 'active' : 'inactive',
+                'updated_at' => now(),
+            ]);
+        }
+
         return response()->noContent();
     }
 }

@@ -1,4 +1,4 @@
-export type EventStatus = "en_attente" | "confirme" | "annuler";
+export type EventStatus = "en_attente" | "confirme" | "annuler" | "en_cours" | "termine" | "echoue";
 export type VenueArea = "interieur" | "exterieur" | "les_deux";
 export type EventType = "mariage" | "celebration_religieuse" | "cocktail";
 

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Search } from "lucide-react";
 import { getTasks, type EventTask } from "@/lib/tasks";
-import { getStaff, type StaffMember as ApiStaffMember } from "@/lib/staff";
+import { getAvailableStaffForEvent, type StaffMember as ApiStaffMember } from "@/lib/staff";
 import { getEvent } from "@/lib/events";
 import { getAssignments, addAssignment } from "@/lib/eventAssignments";
 import { getTaskAssignments, addTaskAssignment } from "@/lib/taskAssignments";
@@ -97,8 +97,9 @@ const EventStaff = () => {
   // Charger le personnel depuis l'API (scopé à l'entreprise)
   useEffect(() => {
     (async () => {
+      if (!id) return;
       try {
-        const list = await getStaff();
+        const list = await getAvailableStaffForEvent(id);
         const normalized = (list as ApiStaffMember[]).map((s) => ({ ...s, id: String(s.id) }));
         setAllStaff(normalized);
         const uniqueRoles = Array.from(new Set(normalized.map((s) => s.role).filter((r): r is string => !!r)));
@@ -108,13 +109,19 @@ const EventStaff = () => {
         setRoles([]);
       }
     })();
-  }, []);
+  }, [id]);
 
   // Recalculer les disponibles quand la liste ou les assignés changent
   useEffect(() => {
     const savedIds = new Set(assignedStaff.map((s) => s.id));
     setAvailableStaff(allStaff.filter((m) => !savedIds.has(m.id)));
   }, [allStaff, assignedStaff]);
+
+  useEffect(() => {
+    const source: ApiStaffMember[] = task ? assignedStaff : availableStaff;
+    const uniqueRoles = Array.from(new Set(source.map((s) => s.role).filter((r): r is string => !!r)));
+    setRoles(uniqueRoles);
+  }, [task, assignedStaff, availableStaff]);
 
   // Charger le titre de l'événement depuis l'API
   useEffect(() => {
