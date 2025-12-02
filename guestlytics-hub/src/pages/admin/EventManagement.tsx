@@ -387,6 +387,11 @@ const EventManagement = () => {
     navigate(`/admin/events/${id}/tables`);
   };
 
+  const goGuests = () => {
+    if (!id) return;
+    navigate(`/admin/events/${id}/guests`);
+  };
+
   const saveTask = async () => {
     if (!id) return;
     const name = taskName.trim();
@@ -516,10 +521,10 @@ const EventManagement = () => {
                         <Button
                           type="button"
                           variant="outline"
-                          className="w-full"
-                          onClick={goProviders}
+                          className="flex-1 bg-primary text-white hover:bg-primary-hover hover:text-white"
+                          onClick={goGuests}
                         >
-                          Prestataires
+                          Gestions des invités
                         </Button>
                       </div>
                     </CardContent>

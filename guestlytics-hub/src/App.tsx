@@ -8,7 +8,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "./pages/admin/Dashboard";
 import Events from "./pages/admin/Events";
 import EventManagement from "./pages/admin/EventManagement";
-import EventGuests from "./pages/admin/EventGuests";
+import Invites from "./pages/admin/Invites";
 import EventTables from "./pages/admin/EventTables";
 import EventStaff from "./pages/admin/EventStaff";
 import Staff from "./pages/admin/Staff";
@@ -71,7 +71,7 @@ const router = createBrowserRouter(
       element: (
         <ProtectedRoute allowedRoles={["admin"]}>
           <AppLayout>
-            <EventGuests />
+            <Invites />
           </AppLayout>
         </ProtectedRoute>
       ),
