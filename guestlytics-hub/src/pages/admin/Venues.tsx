@@ -19,6 +19,7 @@ import {
 } from "@/lib/venues";
 import { ImagePickerDialog } from "@/components/media/ImagePickerDialog";
 import { ImageGalleryDialog } from "@/components/media/ImageGalleryDialog";
+import { getVenueImages, getVenueImageBlobUrl, uploadVenueImages } from "@/lib/venueImages";
 
 type VenueStatus = "vide" | "en_attente" | "occupe";
 type VenueArea = "interieur" | "exterieur" | "les_deux";
@@ -62,6 +63,9 @@ const Venues = () => {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState("");
 
   React.useEffect(() => {
     (async () => {
@@ -98,15 +102,19 @@ const Venues = () => {
     setDialogOpen(true);
   };
 
-  // Photos helpers (frontend demo persistence)
-  const loadVenuePhotos = (id: string): string[] => {
-    try { const raw = localStorage.getItem(`venue_photos_${id}`); return raw ? (JSON.parse(raw) as string[]) : []; } catch { return []; }
-  };
-  const saveVenuePhotos = (id: string, images: string[]) => {
-    try { localStorage.setItem(`venue_photos_${id}`, JSON.stringify(images)); } catch { /* noop */ }
-  };
   const openAddPhotos = (id: string) => { setSelectedVenueId(id); setPickerOpen(true); };
-  const openViewPhotos = (id: string) => { setSelectedVenueId(id); setGalleryImages(loadVenuePhotos(id)); setGalleryOpen(true); };
+  const openViewPhotos = async (id: string) => {
+    setSelectedVenueId(id);
+    setGalleryImages([]);
+    setGalleryOpen(true);
+    try {
+      const items = await getVenueImages(id);
+      const urls = await Promise.all(items.map((it) => getVenueImageBlobUrl(it.id)));
+      setGalleryImages(urls);
+    } catch (_) {
+      setGalleryImages([]);
+    }
+  };
 
   const openEditDialog = (venue: VenueItem) => {
     setEditingVenue(venue);
@@ -364,13 +372,34 @@ const Venues = () => {
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         title="Ajouter des images de la salle"
-        onConfirm={(images) => {
+        onConfirm={() => { /* handled by onConfirmWithFiles for backend upload */ }}
+        onConfirmWithFiles={async (files) => {
           if (!selectedVenueId) return;
-          const current = loadVenuePhotos(selectedVenueId);
-          const next = [...current, ...images];
-          saveVenuePhotos(selectedVenueId, next);
+          setUploadError("");
+          setUploadProgress(0);
+          setUploadOpen(true);
+          try {
+            await uploadVenueImages(selectedVenueId, files, (p) => setUploadProgress(p));
+            await openViewPhotos(selectedVenueId);
+          } catch (e) {
+            const message = (e as { message?: string })?.message || "Échec du téléversement";
+            setUploadError(message);
+          } finally {
+            setTimeout(() => setUploadOpen(false), 400);
+          }
         }}
       />
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Téléversement des images</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div className="text-sm">Progression: {uploadProgress}%</div>
+            {uploadError && <div className="text-destructive text-sm">{uploadError}</div>}
+          </div>
+        </DialogContent>
+      </Dialog>
       <ImageGalleryDialog
         open={galleryOpen}
         onOpenChange={setGalleryOpen}

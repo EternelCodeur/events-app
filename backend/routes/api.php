@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\TableController;
 use App\Http\Controllers\Api\InviteController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EventImageController;
+use App\Http\Controllers\Api\VenueImageController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -73,6 +74,11 @@ Route::middleware(['jwt', 'role:admin,superadmin'])->group(function () {
     Route::post('events/{event}/images', [EventImageController::class, 'store']);
     Route::delete('event-images/{image}', [EventImageController::class, 'destroy']);
     Route::get('event-images/{image}/file', [EventImageController::class, 'file']);
+    // Venue Images (CRUD sans update)
+    Route::get('venues/{venue}/images', [VenueImageController::class, 'index']);
+    Route::post('venues/{venue}/images', [VenueImageController::class, 'store']);
+    Route::delete('venue-images/{image}', [VenueImageController::class, 'destroy']);
+    Route::get('venue-images/{image}/file', [VenueImageController::class, 'file']);
 });
 
 // Users management (admins of entreprise and superadmins)

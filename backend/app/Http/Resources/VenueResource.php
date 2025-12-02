@@ -12,6 +12,7 @@ class VenueResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'name' => $this->name,
+            'folderPath' => $this->folder_path,
             'capacity' => (int) $this->capacity,
             'location' => $this->location,
             'status' => $this->status,

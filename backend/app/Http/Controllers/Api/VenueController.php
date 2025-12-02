@@ -7,6 +7,9 @@ use App\Http\Resources\VenueResource;
 use App\Models\Venue;
 use App\Models\Event;
 use Illuminate\Http\Request;
+use App\Models\Entreprise;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class VenueController extends Controller
 {
@@ -97,6 +100,18 @@ class VenueController extends Controller
             'entreprise_id' => $entrepriseId,
         ]);
 
+        // Create slugged folder for the venue under the entreprise directory
+        $entreprise = Entreprise::findOrFail($entrepriseId);
+        $entrepriseSlug = (string) $entreprise->slug;
+        $base = 'entreprises/' . $entrepriseSlug . '/venues/';
+        $venueSlug = Str::slug((string) $data['name'], '-');
+        $newPath = $base . $venueSlug;
+        if (!Storage::disk('local')->exists($newPath)) {
+            Storage::disk('local')->makeDirectory($newPath);
+        }
+        $venue->folder_path = $newPath;
+        $venue->save();
+
         return new VenueResource($venue);
     }
 
@@ -123,6 +138,8 @@ class VenueController extends Controller
             'area' => ['sometimes', 'in:interieur,exterieur,les_deux'],
         ]);
 
+        $oldName = $venue->getOriginal('name');
+
         // Compute new values without persisting yet
         $newName = array_key_exists('name', $data) ? $data['name'] : $venue->name;
 
@@ -139,6 +156,27 @@ class VenueController extends Controller
         $venue->fill($data);
         $venue->save();
 
+        // If name changed, move/rename the folder accordingly
+        if ($oldName !== $venue->name) {
+            $entreprise = Entreprise::findOrFail($venue->entreprise_id);
+            $entrepriseSlug = (string) $entreprise->slug;
+            $base = 'entreprises/' . $entrepriseSlug . '/venues/';
+            $oldSlugPath = $base . Str::slug((string) $oldName, '-');
+            $oldRawPath = $base . $oldName;
+            $newPath = $base . Str::slug((string) $venue->name, '-');
+            if (Storage::disk('local')->exists($oldSlugPath)) {
+                Storage::disk('local')->move($oldSlugPath, $newPath);
+            } elseif (Storage::disk('local')->exists($oldRawPath)) {
+                Storage::disk('local')->move($oldRawPath, $newPath);
+            } elseif ($venue->folder_path && Storage::disk('local')->exists($venue->folder_path)) {
+                Storage::disk('local')->move($venue->folder_path, $newPath);
+            } else {
+                Storage::disk('local')->makeDirectory($newPath);
+            }
+            $venue->folder_path = $newPath;
+            $venue->save();
+        }
+
         return new VenueResource($venue);
     }
 
@@ -147,6 +185,25 @@ class VenueController extends Controller
         $user = $request->user();
         if (($user->role ?? 'admin') !== 'superadmin' && (int)$venue->entreprise_id !== (int)$user->entreprise_id) {
             abort(403, 'Forbidden');
+        }
+
+        $paths = [];
+        if (!empty($venue->folder_path)) {
+            $paths[] = (string) $venue->folder_path;
+        }
+        $entreprise = Entreprise::find($venue->entreprise_id);
+        if ($entreprise) {
+            $base = 'entreprises/' . (string) $entreprise->slug . '/venues/';
+            $slugPath = $base . Str::slug((string) $venue->name, '-');
+            $rawPath = $base . $venue->name;
+            foreach ([$slugPath, $rawPath] as $p) {
+                if ($p && !in_array($p, $paths, true)) $paths[] = $p;
+            }
+        }
+        foreach ($paths as $p) {
+            if (Storage::disk('local')->exists($p)) {
+                Storage::disk('local')->deleteDirectory($p);
+            }
         }
 
         $venue->delete();

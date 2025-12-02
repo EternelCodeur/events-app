@@ -186,6 +186,9 @@ const EventAlbum: React.FC = () => {
       {/* Lightbox */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
         <DialogContent className="max-w-5xl" aria-describedby={undefined}>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Aperçu de l'image</DialogTitle>
+          </DialogHeader>
           <div
             tabIndex={0}
             onKeyDown={(e) => {
