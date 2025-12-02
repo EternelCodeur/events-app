@@ -10,6 +10,7 @@ use App\Models\Venue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class EventController extends Controller
 {
@@ -160,10 +161,11 @@ class EventController extends Controller
         // Side effect: create directory for the event under entreprise slug
         $entreprise = Entreprise::findOrFail($entrepriseId);
         $slug = (string) $entreprise->slug;
-        Storage::disk('local')->makeDirectory('entreprises/' . $slug . '/events/' . $event->title);
+        $eventSlug = Str::slug((string) $event->title, '-');
+        Storage::disk('local')->makeDirectory('entreprises/' . $slug . '/events/' . $eventSlug);
 
         // Persist folder path on the event
-        $event->folder_path = 'entreprises/' . $slug . '/events/' . $event->title;
+        $event->folder_path = 'entreprises/' . $slug . '/events/' . $eventSlug;
         $event->save();
 
         // Update venue status according to assigned events (time-aware)
@@ -353,10 +355,13 @@ class EventController extends Controller
             $entreprise = Entreprise::findOrFail($event->entreprise_id);
             $slug = (string) $entreprise->slug;
             $base = 'entreprises/' . $slug . '/events/';
-            $oldPath = $base . $oldTitle;
-            $newPath = $base . $event->title;
-            if (Storage::disk('local')->exists($oldPath)) {
-                Storage::disk('local')->move($oldPath, $newPath);
+            $oldSlugPath = $base . Str::slug((string) $oldTitle, '-');
+            $oldRawPath = $base . $oldTitle;
+            $newPath = $base . Str::slug((string) $event->title, '-');
+            if (Storage::disk('local')->exists($oldSlugPath)) {
+                Storage::disk('local')->move($oldSlugPath, $newPath);
+            } elseif (Storage::disk('local')->exists($oldRawPath)) {
+                Storage::disk('local')->move($oldRawPath, $newPath);
             } elseif (Storage::disk('local')->exists($base . $event->id)) {
                 Storage::disk('local')->move($base . $event->id, $newPath);
             } else {
@@ -493,6 +498,11 @@ class EventController extends Controller
         $entreprise = Entreprise::findOrFail($event->entreprise_id);
         $slug = (string) $entreprise->slug;
         $base = 'entreprises/' . $slug . '/events/';
+        $slugPath = $base . Str::slug((string) $event->title, '-');
+        if (!empty($event->folder_path)) {
+            Storage::disk('local')->deleteDirectory($event->folder_path);
+        }
+        Storage::disk('local')->deleteDirectory($slugPath);
         Storage::disk('local')->deleteDirectory($base . $event->title);
         Storage::disk('local')->deleteDirectory($base . $event->id);
 

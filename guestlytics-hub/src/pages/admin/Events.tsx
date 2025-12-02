@@ -791,7 +791,8 @@ const Events = () => {
               <Input
                 value={formBudget}
                 onChange={(e) => setFormBudget(e.target.value)}
-                placeholder="Ex: 15 000€"
+                placeholder="Ex: 15 000FCFA"
+                type="number"
                 required
               />
             </div>

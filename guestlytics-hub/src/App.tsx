@@ -15,6 +15,7 @@ import Staff from "./pages/admin/Staff";
 import StaffAttendancePage from "./pages/admin/StaffAttendancePage";
 import Venues from "./pages/admin/Venues";
 import Users from "./pages/admin/Users";
+import EventAlbum from "./pages/admin/EventAlbum";
 import NotFound from "./pages/NotFound";
 import Companies from "./pages/super-admin/Companies";
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
@@ -92,6 +93,16 @@ const router = createBrowserRouter(
         <ProtectedRoute allowedRoles={["admin"]}>
           <AppLayout>
             <EventStaff />
+          </AppLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: "/admin/events/:id/album",
+      element: (
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <AppLayout>
+            <EventAlbum />
           </AppLayout>
         </ProtectedRoute>
       ),

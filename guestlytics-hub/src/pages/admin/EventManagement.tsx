@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useParams, useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { getEvent as apiGetEvent, type EventItem } from "@/lib/events";
 import { getProvidersPage, createProvider, updateProvider, deleteProvider, type ProviderItem } from "@/lib/providers";
@@ -81,6 +83,11 @@ const EventManagement = () => {
   const [provContact, setProvContact] = useState("");
   const [provError, setProvError] = useState("");
   const [isPrinting, setIsPrinting] = useState(false);
+  // Album (photos)
+  const [albumOpen, setAlbumOpen] = useState(false);
+  const [albumTab, setAlbumTab] = useState<"venue" | "event">("venue");
+  const [venuePhotos, setVenuePhotos] = useState<string[]>([]);
+  const [eventPhotos, setEventPhotos] = useState<string[]>([]);
 
   // Tasks (Réaménagement)
   const [tasks, setTasks] = useState<EventTask[]>([]);
@@ -144,6 +151,18 @@ const EventManagement = () => {
     const v = venues.find((x) => x.id === eventData.venue);
     return v?.name || eventData.venue;
   }, [eventData, venues]);
+
+  // Load photos from localStorage helpers
+  const loadVenuePhotos = (venueId: string): string[] => {
+    try { const raw = localStorage.getItem(`venue_photos_${venueId}`); return raw ? (JSON.parse(raw) as string[]) : []; } catch { return []; }
+  };
+  const loadEventPhotos = (eventId: string): string[] => {
+    try { const raw = localStorage.getItem(`event_photos_${eventId}`); return raw ? (JSON.parse(raw) as string[]) : []; } catch { return []; }
+  };
+  const openAlbum = () => {
+    if (!id) return;
+    navigate(`/admin/events/${id}/album`);
+  };
 
   const openCreateProvider = () => {
     setEditingProvider(null);
@@ -428,6 +447,11 @@ const EventManagement = () => {
             <p className="text-muted-foreground">{loadError ? loadError : "Aucun événement sélectionné. Planifiez et assignez les tâches avant et après l'événement."}</p>
           )}
         </div>
+        {hasEvent && (
+          <div className="flex items-center gap-2">
+            <Button type="button" className="bg-blue-800 hover:bg-blue-900" onClick={openAlbum}>Album</Button>
+          </div>
+        )}
       </div>
 
       {!isCancelledOrFailed && (
@@ -778,7 +802,7 @@ const EventManagement = () => {
             </div>
             <div className="md:col-span-2">
               <label className="text-sm text-muted-foreground">Contact</label>
-              <Input value={provContact} onChange={(e) => setProvContact(e.target.value)} placeholder="Téléphone" />
+              <Input type="number" value={provContact} onChange={(e) => setProvContact(e.target.value)} placeholder="Téléphone" />
             </div>
           </div>
           <DialogFooter>

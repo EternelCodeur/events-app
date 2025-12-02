@@ -101,6 +101,11 @@ export async function getEvents(): Promise<EventItem[]> {
   return request<EventItem[]>(`${API_BASE}`, { method: "GET" });
 }
 
+export async function getEventsByEntreprise(entrepriseId: string): Promise<EventItem[]> {
+  const url = `${API_BASE}?entrepriseId=${encodeURIComponent(entrepriseId)}`;
+  return request<EventItem[]>(url, { method: "GET" });
+}
+
 export async function getEvent(id: string): Promise<EventItem> {
   return request<EventItem>(`${API_BASE}/${encodeURIComponent(id)}`, { method: "GET" });
 }

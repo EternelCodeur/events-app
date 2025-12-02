@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Plus, Search, Pencil, Trash2, MapPin } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, MapPin, Eye, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -17,6 +17,8 @@ import {
   updateVenue as apiUpdateVenue,
   deleteVenue as apiDeleteVenue,
 } from "@/lib/venues";
+import { ImagePickerDialog } from "@/components/media/ImagePickerDialog";
+import { ImageGalleryDialog } from "@/components/media/ImageGalleryDialog";
 
 type VenueStatus = "vide" | "en_attente" | "occupe";
 type VenueArea = "interieur" | "exterieur" | "les_deux";
@@ -56,6 +58,11 @@ const Venues = () => {
   const [formStatus, setFormStatus] = useState<VenueStatus>("vide");
   const [formError, setFormError] = useState("");
 
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+
   React.useEffect(() => {
     (async () => {
       try {
@@ -90,6 +97,16 @@ const Venues = () => {
     setFormError("");
     setDialogOpen(true);
   };
+
+  // Photos helpers (frontend demo persistence)
+  const loadVenuePhotos = (id: string): string[] => {
+    try { const raw = localStorage.getItem(`venue_photos_${id}`); return raw ? (JSON.parse(raw) as string[]) : []; } catch { return []; }
+  };
+  const saveVenuePhotos = (id: string, images: string[]) => {
+    try { localStorage.setItem(`venue_photos_${id}`, JSON.stringify(images)); } catch { /* noop */ }
+  };
+  const openAddPhotos = (id: string) => { setSelectedVenueId(id); setPickerOpen(true); };
+  const openViewPhotos = (id: string) => { setSelectedVenueId(id); setGalleryImages(loadVenuePhotos(id)); setGalleryOpen(true); };
 
   const openEditDialog = (venue: VenueItem) => {
     setEditingVenue(venue);
@@ -223,7 +240,7 @@ const Venues = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="default"
@@ -240,6 +257,25 @@ const Venues = () => {
                   onClick={() => handleDelete(venue.id)}
                 >
                   <Trash2 className="w-4 h-4 mr-1" /> 
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="flex-1 bg-primary hover:bg-primary-hover text-white"
+                  onClick={() => openAddPhotos(venue.id)}
+                >
+                  <ImagePlus className="w-4 h-4 mr-1" />
+                  Ajouter images
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => openViewPhotos(venue.id)}
+                >
+                  <Eye className="w-4 h-4 mr-1" />
+                  Voir images
                 </Button>
               </div>
             </CardContent>
@@ -323,6 +359,24 @@ const Venues = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ImagePickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title="Ajouter des images de la salle"
+        onConfirm={(images) => {
+          if (!selectedVenueId) return;
+          const current = loadVenuePhotos(selectedVenueId);
+          const next = [...current, ...images];
+          saveVenuePhotos(selectedVenueId, next);
+        }}
+      />
+      <ImageGalleryDialog
+        open={galleryOpen}
+        onOpenChange={setGalleryOpen}
+        title="Images de la salle"
+        images={galleryImages}
+      />
     </div>
   );
 };
