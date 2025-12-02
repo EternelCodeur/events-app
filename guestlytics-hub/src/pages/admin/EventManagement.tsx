@@ -154,6 +154,7 @@ const EventManagement = () => {
     setProvComments("");
     setProvContact("");
     setProvError("");
+    setProvDialogOpen(true);
   };
 
   const fetchAllProvidersForPrint = async () => {
@@ -317,6 +318,7 @@ const EventManagement = () => {
     setProvComments(p.comments || "");
     setProvContact(p.contact || "");
     setProvError("");
+    setProvDialogOpen(true);
   };
 
   const saveProvider = async () => {

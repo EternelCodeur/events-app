@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\EventTaskAssignmentController;
 use App\Http\Controllers\Api\UsersController;
 use App\Http\Controllers\Api\TableController;
 use App\Http\Controllers\Api\InviteController;
+use App\Http\Controllers\Api\DashboardController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -55,6 +56,8 @@ Route::middleware(['jwt', 'role:admin,superadmin'])->group(function () {
     Route::patch('tables/{table}', [TableController::class, 'update']);
     Route::delete('tables/{table}', [TableController::class, 'destroy']);
     Route::get('events/{event}/tables/summary', [TableController::class, 'summary']);
+    // Dashboard metrics
+    Route::get('dashboard/metrics', [DashboardController::class, 'metrics']);
     // Table staff assignments
     Route::get('events/{event}/tables/{table}/assignments', [TableController::class, 'assignmentsIndex']);
     Route::post('events/{event}/tables/{table}/assignments', [TableController::class, 'assignmentsStore']);

@@ -1,8 +1,27 @@
+import React, { useEffect, useState } from "react";
 import { Calendar, Users, UserCheck, TrendingUp } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { UpcomingEvents } from "@/components/dashboard/UpcomingEvents";
+import { getDashboardMetrics, type DashboardMetrics } from "@/lib/dashboard";
 
 const Dashboard = () => {
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const m = await getDashboardMetrics();
+        setMetrics(m);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const fmtCfa = (n: number | undefined) =>
+    typeof n === "number" ? `${new Intl.NumberFormat("fr-FR").format(n)} CFA` : "-";
+
   return (
     <div className="space-y-6">
       <div>
@@ -16,32 +35,32 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KpiCard
           title="Événements à venir"
-          value={8}
-          change="+2 ce mois"
+          value={loading ? "…" : (metrics?.eventsUpcomingCount ?? 0)}
+          change={undefined}
           changeType="positive"
           icon={Calendar}
           variant="blue"
         />
         <KpiCard
-          title="Salles totales"
-          value="1,248"
-          change="3 occupés"
+          title="Salles occupées"
+          value={loading ? "…" : (metrics?.venuesOccupiedCount ?? 0)}
+          change={loading ? undefined : `sur ${metrics?.venuesTotal ?? 0}`}
           changeType="neutral"
           icon={Users}
           variant="green"
         />
         <KpiCard
           title="Employés actifs"
-          value={24}
-          change="3 en service"
+          value={loading ? "…" : (metrics?.staffActiveCount ?? 0)}
+          change={undefined}
           changeType="neutral"
           icon={UserCheck}
           variant="orange"
         />
         <KpiCard
           title="Revenu mensuel"
-          value="89,400 FCFA"
-          change="+12.5%"
+          value={loading ? "…" : fmtCfa(metrics?.monthlyRevenueCfa || 0)}
+          change={undefined}
           changeType="positive"
           icon={TrendingUp}
           variant="red"
