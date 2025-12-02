@@ -21,6 +21,11 @@ import {
 } from "@/lib/tables";
 import type { TableItem as ApiTableItem, TableStatus } from "@/lib/tables";
 import { getAssignments } from "@/lib/eventAssignments";
+import {
+  getTableAssignments as apiGetTableAssignments,
+  addTableAssignment as apiAddTableAssignment,
+  removeTableAssignment as apiRemoveTableAssignment,
+} from "@/lib/tableAssignments";
 
 type TableItem = ApiTableItem;
 
@@ -92,13 +97,7 @@ const EventTables = () => {
         setEventAssignedStaff([]);
       }
     })();
-    try {
-      const rawAssign = localStorage.getItem(`eventTableAssignments:${id}`);
-      const assign: Record<string, string[]> = rawAssign ? JSON.parse(rawAssign) : {};
-      setTableAssignments(assign);
-    } catch (_) {
-      setTableAssignments({});
-    }
+    setTableAssignments({});
   }, [id]);
 
   const filteredTables = useMemo(() => {
@@ -109,6 +108,30 @@ const EventTables = () => {
       `${table.name}`.toLowerCase().includes(term),
     );
   }, [tables, searchTerm]);
+
+  // Preload table assignments so they are visible immediately (even post-event)
+  useEffect(() => {
+    if (!id || tables.length === 0) return;
+    (async () => {
+      try {
+        const entries = await Promise.all(
+          tables.map(async (t) => {
+            try {
+              const list = await apiGetTableAssignments(id, t.id);
+              return [t.id, list.map((s) => String(s.id))] as [string, string[]];
+            } catch {
+              return [t.id, []] as [string, string[]];
+            }
+          })
+        );
+        const map: Record<string, string[]> = {};
+        for (const [tid, ids] of entries) { map[tid] = ids; }
+        setTableAssignments(map);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [id, tables]);
 
   const openCreateDialog = () => {
     setEditingTable(null);
@@ -126,9 +149,20 @@ const EventTables = () => {
 
   const openAssignDialog = (table: TableItem) => {
     setAssignTable(table);
-    const preselected = tableAssignments[table.id] || [];
-    setSelectedStaffIds(preselected);
-    setAssignDialogOpen(true);
+    if (!id) { setAssignDialogOpen(true); return; }
+    (async () => {
+      try {
+        const list = await apiGetTableAssignments(id, table.id);
+        const ids = list.map((s) => String(s.id));
+        setSelectedStaffIds(ids);
+        setTableAssignments((prev) => ({ ...prev, [table.id]: ids }));
+      } catch (_) {
+        const preselected = tableAssignments[table.id] || [];
+        setSelectedStaffIds(preselected);
+      } finally {
+        setAssignDialogOpen(true);
+      }
+    })();
   };
 
   const toggleSelectStaff = (staffId: string) => {
@@ -137,13 +171,22 @@ const EventTables = () => {
     );
   };
 
-  const saveAssignDialog = () => {
+  const saveAssignDialog = async () => {
     if (!id || !assignTable) return;
-    const next = { ...tableAssignments, [assignTable.id]: selectedStaffIds };
-    setTableAssignments(next);
-    localStorage.setItem(`eventTableAssignments:${id}`, JSON.stringify(next));
-    setAssignDialogOpen(false);
-    setAssignTable(null);
+    const prev = tableAssignments[assignTable.id] || [];
+    const toAdd = selectedStaffIds.filter((sid) => !prev.includes(sid));
+    const toRemove = prev.filter((sid) => !selectedStaffIds.includes(sid));
+    try {
+      await Promise.all([
+        ...toAdd.map((sid) => apiAddTableAssignment(id, assignTable.id, sid)),
+        ...toRemove.map((sid) => apiRemoveTableAssignment(id, assignTable.id, sid)),
+      ]);
+      setTableAssignments((map) => ({ ...map, [assignTable.id]: selectedStaffIds }));
+      setAssignDialogOpen(false);
+      setAssignTable(null);
+    } catch (e) {
+      alert(String(e));
+    }
   };
 
   const handleDelete = (idToDelete: string) => {
@@ -298,7 +341,7 @@ const EventTables = () => {
                     variant="outline"
                     className="flex-1"
                     onClick={() => openAssignDialog(table)}
-                    disabled={eventAssignedStaff.length === 0}
+                    disabled={eventAssignedStaff.length === 0 || isAssignForbidden}
                   >
                     Assigner des personnes
                   </Button>

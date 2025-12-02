@@ -55,6 +55,10 @@ Route::middleware(['jwt', 'role:admin,superadmin'])->group(function () {
     Route::patch('tables/{table}', [TableController::class, 'update']);
     Route::delete('tables/{table}', [TableController::class, 'destroy']);
     Route::get('events/{event}/tables/summary', [TableController::class, 'summary']);
+    // Table staff assignments
+    Route::get('events/{event}/tables/{table}/assignments', [TableController::class, 'assignmentsIndex']);
+    Route::post('events/{event}/tables/{table}/assignments', [TableController::class, 'assignmentsStore']);
+    Route::delete('events/{event}/tables/{table}/assignments/{staff}', [TableController::class, 'assignmentsDestroy']);
     // Invites
     Route::get('events/{event}/invites', [InviteController::class, 'index']);
     Route::post('events/{event}/invites', [InviteController::class, 'store']);

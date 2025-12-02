@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
+import { getEvent } from '@/lib/events';
 
 interface Invite {
   id: number;
@@ -85,6 +86,8 @@ const Invites = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [eventStatus, setEventStatus] = useState<string | undefined>(undefined);
+  const isReadOnly = eventStatus === 'termine' || eventStatus === 'annuler' || eventStatus === 'echoue';
 
   const inviteFormSchema = z.object({
     nom: z.string().min(1, 'Le nom est requis'),
@@ -194,6 +197,18 @@ const Invites = () => {
     fetchInvites();
     fetchTables();
   }, [fetchInvites, fetchTables]);
+
+  useEffect(() => {
+    (async () => {
+      if (!id) return;
+      try {
+        const ev = await getEvent(id);
+        setEventStatus((ev as { status?: string }).status);
+      } catch {
+        setEventStatus(undefined);
+      }
+    })();
+  }, [id]);
 
   const handleEditInvite = (invite: Invite) => {
     setEditingInvite(invite);
@@ -424,6 +439,7 @@ const Invites = () => {
                 });
                 setIsCreateOpen(true);
               }}
+              disabled={isReadOnly}
             >
               <Plus className="h-4 w-4 mr-2" />
               Ajouter un invité
@@ -538,7 +554,7 @@ const Invites = () => {
                   >
                     Annuler
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" disabled={isReadOnly}>
                     Ajouter
                   </Button>
                 </div>
@@ -661,7 +677,7 @@ const Invites = () => {
                   >
                     Annuler
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" disabled={isReadOnly}>
                     Mettre à jour
                   </Button>
                 </div>
@@ -734,6 +750,7 @@ const Invites = () => {
                   size="icon" 
                   className="text-destructive border border-red-500 hover:border-red-200 hover:text-destructive/90"
                   onClick={() => handleDeleteInvite(invite.id)}
+                  disabled={isReadOnly}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

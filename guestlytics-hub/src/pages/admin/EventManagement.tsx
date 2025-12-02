@@ -582,6 +582,32 @@ const EventManagement = () => {
                       </div>
                     </CardContent>
                   </Card>
+                  {/* Mise en place (lecture seule): accès aux écrans Tables & Invités */}
+                  <Card className="border border-border">
+                    <CardHeader>
+                      <h3 className="text-lg font-semibold text-foreground">Mise en place</h3>
+                      <p className="text-sm text-muted-foreground">Tables, placement, assignations (lecture seule)</p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          className="flex-1 bg-primary hover:bg-primary-hover text-white"
+                          onClick={goTables}
+                        >
+                          Gestion des tables
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 bg-primary text-white hover:bg-primary-hover hover:text-white"
+                          onClick={goGuests}
+                        >
+                          Gestions des invités
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               )}
             </div>

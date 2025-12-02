@@ -39,7 +39,17 @@ class InviteController extends Controller
             'table_id' => ['nullable', 'integer'],
             'statut' => ['sometimes', 'in:confirmed,pending'],
             'additionalGuests' => ['sometimes', 'array'],
+            'notes' => ['sometimes', 'nullable', 'string'],
         ]);
+
+        // Prevent duplicate invite (same nom+prenom) for the same event
+        $exists = Invite::where('event_id', $event->id)
+            ->whereRaw('LOWER(nom) = ?', [strtolower(trim($data['nom']))])
+            ->whereRaw('LOWER(prenom) = ?', [strtolower(trim($data['prenom']))])
+            ->exists();
+        if ($exists) {
+            abort(422, "Cet invité existe déjà pour cet événement");
+        }
 
         $tableId = $data['table_id'] ?? null;
         $table = null;
@@ -75,6 +85,7 @@ class InviteController extends Controller
             'statut' => $data['statut'] ?? 'pending',
             'present' => false,
             'additional_guests' => $additional,
+            'notes' => $data['notes'] ?? null,
         ]);
 
         if ($table) { $this->recomputeTableStatus($table); }
@@ -101,6 +112,7 @@ class InviteController extends Controller
             'table_id' => ['sometimes', 'nullable', 'integer'],
             'statut' => ['sometimes', 'in:confirmed,pending'],
             'additionalGuests' => ['sometimes', 'array'],
+            'notes' => ['sometimes', 'nullable', 'string'],
         ]);
 
         $oldTableId = $invite->event_table_id;
@@ -122,12 +134,26 @@ class InviteController extends Controller
             }
         }
 
-        if (array_key_exists('nom', $data)) $invite->nom = $data['nom'];
-        if (array_key_exists('prenom', $data)) $invite->prenom = $data['prenom'];
+        // Check duplicate on name change
+        $newNom = array_key_exists('nom', $data) ? trim((string)$data['nom']) : $invite->nom;
+        $newPrenom = array_key_exists('prenom', $data) ? trim((string)$data['prenom']) : $invite->prenom;
+        if ($newNom !== $invite->nom || $newPrenom !== $invite->prenom) {
+            $exists = Invite::where('event_id', $invite->event_id)
+                ->where('id', '<>', $invite->id)
+                ->whereRaw('LOWER(nom) = ?', [strtolower($newNom)])
+                ->whereRaw('LOWER(prenom) = ?', [strtolower($newPrenom)])
+                ->exists();
+            if ($exists) {
+                abort(422, "Cet invité existe déjà pour cet événement");
+            }
+        }
+        if (array_key_exists('nom', $data)) $invite->nom = $newNom;
+        if (array_key_exists('prenom', $data)) $invite->prenom = $newPrenom;
         if (array_key_exists('telephone', $data)) $invite->telephone = $data['telephone'];
         if (array_key_exists('personnes', $data)) $invite->personnes = $newPersonnes;
         if (array_key_exists('table_id', $data)) $invite->event_table_id = $newTableId;
         if (array_key_exists('statut', $data)) $invite->statut = $data['statut'];
+        if (array_key_exists('notes', $data)) $invite->notes = $data['notes'];
         if (array_key_exists('additionalGuests', $data)) {
             $newAdditional = [];
             if (is_array($data['additionalGuests'])) {
@@ -155,6 +181,10 @@ class InviteController extends Controller
         $user = $request->user();
         if (($user->role ?? 'admin') !== 'superadmin' && (int)$invite->entreprise_id !== (int)$user->entreprise_id) {
             abort(403, 'Forbidden');
+        }
+        $event = $invite->event;
+        if ($event && in_array((string) $event->status, ['termine', 'annuler', 'echoue'], true)) {
+            abort(422, "Impossible de supprimer un invité pour un événement terminé, annulé ou échoué");
         }
         $tableId = $invite->event_table_id;
         $invite->delete();
