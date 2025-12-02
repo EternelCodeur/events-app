@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\EventTaskController;
 use App\Http\Controllers\Api\EventAssignmentController;
 use App\Http\Controllers\Api\EventTaskAssignmentController;
 use App\Http\Controllers\Api\UsersController;
+use App\Http\Controllers\Api\TableController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -47,6 +48,11 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
     Route::get('events/{event}/tasks/{task}/assignments', [EventTaskAssignmentController::class, 'index']);
     Route::post('events/{event}/tasks/{task}/assignments', [EventTaskAssignmentController::class, 'store']);
     Route::delete('events/{event}/tasks/{task}/assignments/{staff}', [EventTaskAssignmentController::class, 'destroy']);
+    // Event Tables (Tables pour les invités)
+    Route::get('events/{event}/tables', [TableController::class, 'index']);
+    Route::post('events/{event}/tables', [TableController::class, 'store']);
+    Route::patch('tables/{table}', [TableController::class, 'update']);
+    Route::delete('tables/{table}', [TableController::class, 'destroy']);
 });
 
 // Users management (admins of entreprise and superadmins)

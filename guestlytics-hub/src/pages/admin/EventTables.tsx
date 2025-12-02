@@ -13,33 +13,22 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  getTables as apiGetTables,
+  createTable as apiCreateTable,
+  updateTable as apiUpdateTable,
+  deleteTable as apiDeleteTable,
+} from "@/lib/tables";
+import type { TableItem as ApiTableItem, TableStatus } from "@/lib/tables";
+import { getAssignments } from "@/lib/eventAssignments";
 
-type TableStatus = "en_attente" | "pleine";
-
-interface TableItem {
-  id: string;
-  name: string;
-  capacity: number;
-  status: TableStatus;
-}
+type TableItem = ApiTableItem;
 
 interface StaffMember {
   id: string;
   name: string;
   role: string;
 }
-
-const initialTables: TableItem[] = [
-  { id: "t1", name: "Table 1", capacity: 8, status: "en_attente" },
-  { id: "t2", name: "Table 2", capacity: 10, status: "en_attente" },
-  { id: "t3", name: "Table 3", capacity: 6, status: "pleine" },
-];
-
-const mockEvents = [
-  { id: "1", title: "Mariage Dupont" },
-  { id: "2", title: "Conférence Tech 2025" },
-  { id: "3", title: "Gala Entreprise ABC" },
-];
 
 const tableStatusColors: Record<TableStatus, string> = {
   en_attente: "bg-amber-500 hover:bg-amber-600",
@@ -55,7 +44,7 @@ const EventTables = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [tables, setTables] = useState<TableItem[]>(initialTables);
+  const [tables, setTables] = useState<TableItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<TableItem | null>(null);
@@ -66,11 +55,10 @@ const EventTables = () => {
   const [assignTable, setAssignTable] = useState<TableItem | null>(null);
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [eventStatus, setEventStatus] = useState<string | undefined>(undefined);
+  const [eventTitle, setEventTitle] = useState<string>("");
 
   const [formName, setFormName] = useState("");
   const [formCapacity, setFormCapacity] = useState("");
-
-  const event = mockEvents.find((e) => e.id === id);
 
   useEffect(() => {
     (async () => {
@@ -78,8 +66,12 @@ const EventTables = () => {
       try {
         const ev = await getEvent(id);
         setEventStatus((ev as { status?: string }).status);
+        setEventTitle((ev as { title?: string }).title || "");
+        const ts = await apiGetTables(id);
+        setTables(ts as TableItem[]);
       } catch {
         setEventStatus(undefined);
+        setTables([]);
       }
     })();
   }, [id]);
@@ -90,14 +82,16 @@ const EventTables = () => {
   }, [eventStatus]);
 
   useEffect(() => {
-    if (!id) return;
-    try {
-      const rawStaff = localStorage.getItem(`eventStaffAssigned:${id}`);
-      const staff: StaffMember[] = rawStaff ? JSON.parse(rawStaff) : [];
-      setEventAssignedStaff(staff);
-    } catch (_) {
-      setEventAssignedStaff([]);
-    }
+    (async () => {
+      if (!id) return;
+      try {
+        const list = await getAssignments(id);
+        const normalized = (list as StaffMember[]).map((s) => ({ ...s, id: String(s.id) }));
+        setEventAssignedStaff(normalized);
+      } catch (_) {
+        setEventAssignedStaff([]);
+      }
+    })();
     try {
       const rawAssign = localStorage.getItem(`eventTableAssignments:${id}`);
       const assign: Record<string, string[]> = rawAssign ? JSON.parse(rawAssign) : {};
@@ -153,33 +147,46 @@ const EventTables = () => {
   };
 
   const handleDelete = (idToDelete: string) => {
-    if (window.confirm("Supprimer définitivement cette table ?")) {
-      setTables((prev) => prev.filter((t) => t.id !== idToDelete));
-    }
+    if (!idToDelete) return;
+    if (!window.confirm("Supprimer définitivement cette table ?")) return;
+    (async () => {
+      try {
+        await apiDeleteTable(idToDelete);
+        setTables((prev) => prev.filter((t) => t.id !== idToDelete));
+      } catch (e) {
+        alert(String(e));
+      }
+    })();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!id) return;
     if (!formName || !formCapacity) return;
-
     const capacityValue = Number(formCapacity);
     if (Number.isNaN(capacityValue) || capacityValue <= 0) return;
 
-    const payload: TableItem = {
-      id: editingTable ? editingTable.id : Date.now().toString(),
-      name: formName,
-      capacity: capacityValue,
-      status: editingTable?.status ?? "en_attente",
-    };
-
-    setTables((prev) => {
-      if (editingTable) {
-        return prev.map((t) => (t.id === editingTable.id ? payload : t));
+    (async () => {
+      try {
+        if (editingTable) {
+          const updated = await apiUpdateTable(editingTable.id, {
+            name: formName,
+            capacity: capacityValue,
+          });
+          setTables((prev) => prev.map((t) => (t.id === editingTable.id ? (updated as TableItem) : t)));
+        } else {
+          const created = await apiCreateTable(id, {
+            name: formName,
+            capacity: capacityValue,
+            status: "en_attente",
+          });
+          setTables((prev) => [...prev, created as TableItem]);
+        }
+        setDialogOpen(false);
+      } catch (e) {
+        alert(String(e));
       }
-      return [...prev, payload];
-    });
-
-    setDialogOpen(false);
+    })();
   };
 
   return (
@@ -187,7 +194,7 @@ const EventTables = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">
-            {event ? event.title : "Tables de l'événement"}
+            {eventTitle || "Tables de l'événement"}
           </h1>
           <p className="text-muted-foreground">
             Gérez les tables uniquement pour cet événement.
@@ -205,6 +212,7 @@ const EventTables = () => {
             type="button"
             className="bg-primary hover:bg-primary-hover"
             onClick={openCreateDialog}
+            disabled={eventStatus === "termine" || eventStatus === "annuler" || eventStatus === "echoue"}
           >
             <Plus className="w-4 h-4 mr-2" /> Nouvelle table
           </Button>
@@ -303,6 +311,7 @@ const EventTables = () => {
                   size="sm"
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                   onClick={() => openEditDialog(table)}
+                  disabled={eventStatus === "termine" || eventStatus === "annuler" || eventStatus === "echoue"}
                 >
                   <Pencil className="w-4 h-4 mr-1" />
                 </Button>
@@ -311,6 +320,7 @@ const EventTables = () => {
                   size="sm"
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white"
                   onClick={() => handleDelete(table.id)}
+                  disabled={eventStatus === "termine" || eventStatus === "annuler" || eventStatus === "echoue"}
                 >
                   <Trash2 className="w-4 h-4 mr-1" />
                 </Button>
