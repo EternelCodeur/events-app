@@ -31,27 +31,25 @@ export const KpiCard = ({
 
   return (
     <Card className={cn("hover:shadow-xl transition-shadow border-0 overflow-hidden", gradientClass)}>
-      <CardContent className="p-6 text-white">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-gray-200 mb-1">{title}</p>
-            <p className="text-4xl font-bold text-white mb-2">{value}</p>
-            {change && (
-              <p
-                className={cn(
-                  "text-sm font-medium",
-                  changeType === "positive" && "text-black",
-                  changeType === "negative" && "text-red-800",
-                  changeType === "neutral" && "text-white/80"
-                )}
-              >
-                {change}
-              </p>
-            )}
-          </div>
-          <div className="p-3 rounded-xl bg-black/10">
-            <Icon className="w-6 h-6 text-black" />
-          </div>
+      <CardContent className="p-6 text-white relative">
+        <div className="absolute top-4 right-4 p-3 rounded-xl bg-black/10">
+          <Icon className="w-5 h-5 text-black" />
+        </div>
+        <div className="pr-14">
+          <p className="text-sm font-medium text-gray-200 mb-1">{title}</p>
+          <p className="text-3xl font-bold text-white mb-2">{value}</p>
+          {change && (
+            <p
+              className={cn(
+                "text-sm font-medium",
+                changeType === "positive" && "text-black",
+                changeType === "negative" && "text-red-800",
+                changeType === "neutral" && "text-white/80"
+              )}
+            >
+              {change}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

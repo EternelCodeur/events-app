@@ -35,15 +35,17 @@ export const UpcomingEvents = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [venuesMap, setVenuesMap] = useState<Record<string, string>>({});
   const [allEvents, setAllEvents] = useState<EventItem[]>([]);
-  const [range, setRange] = useState<"today" | "month">("month");
+  const [range, setRange] = useState<"today" | "month" | "year">("month");
 
-  const filterEvents = (all: EventItem[], rangeMode: "today" | "month"): EventItem[] => {
+  const filterEvents = (all: EventItem[], rangeMode: "today" | "month" | "year"): EventItem[] => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const now = new Date();
     const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     const nowHM = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
     const endOfMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     const monthEnd = `${endOfMonthDate.getFullYear()}-${pad(endOfMonthDate.getMonth() + 1)}-${pad(endOfMonthDate.getDate())}`;
+    const endOfYearDate = new Date(now.getFullYear(), 11, 31);
+    const yearEnd = `${endOfYearDate.getFullYear()}-12-31`;
     return all
       .filter(e => (e.status === "en_attente" || e.status === "confirme"))
       .filter(e => {
@@ -58,11 +60,20 @@ export const UpcomingEvents = () => {
             return st >= nowHM;
           }
           return true;
-        } else { // today
+        } else if (rangeMode === "today") {
           if (d !== today) return false;
           const st = String(e.startTime || "");
           if (!st) return true;
           return st >= nowHM;
+        } else { // year
+          if (d < today) return false;
+          if (d > yearEnd) return false;
+          if (d === today) {
+            const st = String(e.startTime || "");
+            if (!st) return true;
+            return st >= nowHM;
+          }
+          return true;
         }
       })
       .sort((a, b) => {
@@ -103,13 +114,14 @@ export const UpcomingEvents = () => {
           Événements à venir
         </CardTitle>
         <div className="flex items-center gap-2">
-          <Select value={range} onValueChange={(v) => setRange(v as "today" | "month")}>
+          <Select value={range} onValueChange={(v) => setRange(v as "today" | "month" | "year")}>
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Période" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="today">Aujourd'hui</SelectItem>
               <SelectItem value="month">Ce mois</SelectItem>
+              <SelectItem value="year">Cette année</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" asChild>
