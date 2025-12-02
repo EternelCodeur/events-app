@@ -20,7 +20,6 @@ interface Invite {
   nom: string;
   prenom: string;
   telephone: string;
-  cote: 'mariee' | 'marie' | 'tous';
   personnes: number;
   table_id?: number | null;
   table_name?: string;
@@ -37,7 +36,6 @@ type InviteApi = {
   nom: string;
   prenom: string;
   telephone: string;
-  cote: 'mariee' | 'marie' | 'tous';
   personnes: number;
   table_id?: number | null;
   table_name?: string | null;
@@ -47,6 +45,32 @@ type InviteApi = {
   additionalGuests?: string[] | null;
 };
 
+async function getAuthHeader(): Promise<HeadersInit> {
+  try {
+    const { getToken } = await import("@/lib/auth");
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
+  const auth = await getAuthHeader();
+  const res = await fetch(path, { credentials: "include", ...init, headers: { ...(init.headers || {}), ...(auth as HeadersInit) } });
+  if (res.status === 401) {
+    try {
+      const { refresh } = await import("@/lib/auth");
+      const ok = await refresh();
+      if (ok) {
+        const retryAuth = await getAuthHeader();
+        return fetch(path, { credentials: "include", ...init, headers: { ...(init.headers || {}), ...(retryAuth as HeadersInit) } });
+      }
+    } catch { /* noop */ }
+  }
+  return res;
+}
+
 const Invites = () => {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [tablesOptions, setTablesOptions] = useState<TableOption[]>([]);
@@ -54,7 +78,7 @@ const Invites = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [filterSide, setFilterSide] = useState('all');
+  // removed side filter
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingInvite, setEditingInvite] = useState<Invite | null>(null);
@@ -67,7 +91,6 @@ const Invites = () => {
     prenom: z.string().min(1, 'Le prénom est requis'),
     email: z.string().email('Email invalide').optional().or(z.literal('')),
     telephone: z.string().min(1, 'Le téléphone est requis'),
-    cote: z.enum(['mariee', 'marie', 'tous']),
     personnes: z.coerce.number().min(1, 'Au moins une personne'),
     table_id: z.coerce.number().optional(),
     statut: z.enum(['confirmed', 'pending']),
@@ -85,7 +108,6 @@ const Invites = () => {
       nom: '',
       prenom: '',
       telephone: '',
-      cote: 'tous',
       personnes: 1,
       table_id: undefined,
       statut: 'pending',
@@ -100,7 +122,6 @@ const Invites = () => {
       nom: '',
       prenom: '',
       telephone: '',
-      cote: 'tous',
       personnes: 1,
       table_id: undefined,
       statut: 'pending',
@@ -115,7 +136,6 @@ const Invites = () => {
     nom: i.nom,
     prenom: i.prenom,
     telephone: i.telephone,
-    cote: i.cote,
     personnes: i.personnes,
     table_id: i.table_id ?? null,
     table_name: i.table_name ?? '',
@@ -128,7 +148,7 @@ const Invites = () => {
   const fetchInvites = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/invites', { credentials: 'include' });
+      const res = await fetchWithAuth(`/api/events/${encodeURIComponent(id || '')}/invites`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
       const list = Array.isArray(payload) ? payload : (payload.data ?? []);
@@ -141,11 +161,11 @@ const Invites = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, id]);
 
   const fetchTables = useCallback(async () => {
     try {
-      const res = await fetch('/api/tables', { credentials: 'include' });
+      const res = await fetchWithAuth(`/api/events/${encodeURIComponent(id || '')}/tables/summary`);
       if (!res.ok) return;
       const payload = await res.json();
       const list = Array.isArray(payload) ? payload : (payload.data ?? []);
@@ -168,7 +188,7 @@ const Invites = () => {
     } catch (e) {
       // ignore
     }
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     fetchInvites();
@@ -182,7 +202,6 @@ const Invites = () => {
       nom: invite.nom,
       prenom: invite.prenom,
       telephone: invite.telephone,
-      cote: invite.cote,
       personnes: invite.personnes,
       table_id: invite.table_id ?? undefined,
       additionalGuests: invite.additionalGuests || [],
@@ -205,16 +224,16 @@ const Invites = () => {
         nom: data.nom,
         prenom: data.prenom,
         telephone: data.telephone,
-        cote: data.cote,
         personnes: Number(data.personnes),
         table_id: data.table_id && Number(data.table_id) > 0 ? Number(data.table_id) : null,
         statut: data.statut ?? 'pending',
         additionalGuests: (data.additionalGuests ?? []).filter((s: string) => s && s.trim().length > 0),
       };
-      const res = await fetch('/api/invites', {
+      const auth = await getAuthHeader();
+      const res = await fetch(`/api/events/${encodeURIComponent(id || '')}/invites`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(auth as HeadersInit) },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -225,6 +244,7 @@ const Invites = () => {
       const created = mapInvite(json?.data ?? json);
       setInvites(prev => [...prev, created]);
       toast({ title: 'Invité ajouté', description: `${data.prenom} ${data.nom} a été ajouté à la liste des invités.` });
+      fetchTables();
       setIsCreateOpen(false);
       createForm.reset();
     } catch (e: unknown) {
@@ -255,15 +275,15 @@ const Invites = () => {
         nom: data.nom,
         prenom: data.prenom,
         telephone: data.telephone,
-        cote: data.cote,
         personnes: Number(data.personnes),
         table_id: data.table_id && Number(data.table_id) > 0 ? Number(data.table_id) : null,
         additionalGuests: (data.additionalGuests ?? []).filter((s: string) => s && s.trim().length > 0),
       };
+      const auth = await getAuthHeader();
       const res = await fetch(`/api/invites/${editingId}`, {
         method: 'PUT',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(auth as HeadersInit) },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -319,7 +339,8 @@ const Invites = () => {
     const inviteToDelete = invites.find(i => i.id === id);
     if (inviteToDelete && confirm(`Êtes-vous sûr de vouloir supprimer ${inviteToDelete.prenom} ${inviteToDelete.nom} ?`)) {
       try {
-        const res = await fetch(`/api/invites/${id}`, { method: 'DELETE', credentials: 'include' });
+        const auth = await getAuthHeader();
+        const res = await fetch(`/api/invites/${id}`, { method: 'DELETE', credentials: 'include', headers: { ...(auth as HeadersInit) } });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw { response: { data: err } };
@@ -339,11 +360,32 @@ const Invites = () => {
       invite.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (invite.table_name ?? '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || invite.statut === filterStatus;
-    const matchesSide = filterSide === 'all' || invite.cote === filterSide;
-    return matchesSearch && matchesStatus && matchesSide;
+    return matchesSearch && matchesStatus;
   });
 
-  const availableTables = tables.filter((t) => !t.isFull);
+  const createPersons = createForm.watch('personnes');
+  const availableTablesCreate = tables.filter((t) => {
+    if (t.isFull) return false;
+    const p = Number(createPersons) || 1;
+    if (typeof t.remaining === 'number') return t.remaining >= p;
+    return true;
+  });
+
+  const editPersons = editForm.watch('personnes');
+  const availableTablesEdit = tables.filter((t) => {
+    if (t.isFull) {
+      // Autoriser la table courante si elle peut contenir avec l'ancien nombre
+      if (editingInvite && t.id === (editingInvite.table_id ?? 0)) {
+        const baseRem = typeof t.remaining === 'number' ? t.remaining : 0;
+        const effectiveRemaining = baseRem + (editingInvite?.personnes ?? 0);
+        return effectiveRemaining >= (Number(editPersons) || 1);
+      }
+      return false;
+    }
+    const p = Number(editPersons) || 1;
+    if (typeof t.remaining === 'number') return t.remaining >= p;
+    return true;
+  });
 
   return (
     <div className="w-full h-full p-6 space-y-6">
@@ -375,7 +417,6 @@ const Invites = () => {
                   nom: '',
                   prenom: '',
                   telephone: '',
-                  cote: 'tous',
                   personnes: 1,
                   table_id: (tablesOptions[0]?.id ?? 0) as any,
                   statut: 'pending' as any,
@@ -474,7 +515,7 @@ const Invites = () => {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {availableTables.map((t) => (
+                            {availableTablesCreate.map((t) => (
                               <SelectItem key={t.id} value={String(t.id)}>
                                 {t.nom}{typeof t.remaining === 'number' ? ` (restantes: ${t.remaining})` : ''}
                               </SelectItem>
@@ -594,7 +635,7 @@ const Invites = () => {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {availableTables.map((t) => (
+                            {availableTablesEdit.map((t) => (
                               <SelectItem key={t.id} value={String(t.id)}>
                                 {t.nom}{typeof t.remaining === 'number' ? ` (restantes: ${t.remaining})` : ''}
                               </SelectItem>
@@ -648,16 +689,6 @@ const Invites = () => {
                 className="pl-10"
               />
             </div>
-            <Select value={filterSide} onValueChange={setFilterSide}>
-              <SelectTrigger>
-                <SelectValue placeholder="Côté" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les côtés</SelectItem>
-                <SelectItem value="marie">Côté marié</SelectItem>
-                <SelectItem value="mariee">Côté mariée</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
@@ -690,13 +721,9 @@ const Invites = () => {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Statut</span>
-                <Badge variant={invite.statut === 'confirmed' ? 'confirmed' : 'pending'}>
+                <Badge variant="outline">
                   {invite.statut === 'confirmed' ? 'Confirmé' : 'En attente'}
                 </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Côté</span>
-                <Badge variant="outline">{invite.cote === 'marie' ? 'Marié' : invite.cote === 'mariee' ? 'Mariée' : 'Les deux'}</Badge>
               </div>
               <div className="text-sm text-muted-foreground space-y-2">
                 <div>{invite.telephone}</div>
@@ -729,7 +756,6 @@ const Invites = () => {
             <Button variant="outline" onClick={() => {
               setSearchTerm('');
               setFilterStatus('all');
-              setFilterSide('all');
             }}>
               Réinitialiser les filtres
             </Button>

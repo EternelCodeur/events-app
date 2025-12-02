@@ -49,11 +49,24 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: HeadersInit = init.body
     ? { "Content-Type": "application/json", ...authHeader, ...(init.headers || {}) }
     : { ...authHeader, ...(init.headers || {}) };
-  const res = await fetch(path, {
+  let res = await fetch(path, {
     credentials: "include",
     ...init,
     headers,
   });
+  if (res.status === 401) {
+    try {
+      const { refresh } = await import("./auth");
+      const ok = await refresh();
+      if (ok) {
+        const newAuth = await getAuthHeader();
+        const headers2: HeadersInit = init.body
+          ? { "Content-Type": "application/json", ...newAuth, ...(init.headers || {}) }
+          : { ...newAuth, ...(init.headers || {}) };
+        res = await fetch(path, { credentials: "include", ...init, headers: headers2 });
+      }
+    } catch { /* noop */ }
+  }
   const text = await res.text();
   const data = text ? (JSON.parse(text) as unknown) : null;
   if (!res.ok) {

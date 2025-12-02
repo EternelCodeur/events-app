@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\EventAssignmentController;
 use App\Http\Controllers\Api\EventTaskAssignmentController;
 use App\Http\Controllers\Api\UsersController;
 use App\Http\Controllers\Api\TableController;
+use App\Http\Controllers\Api\InviteController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -26,7 +27,7 @@ Route::middleware(['jwt', 'role:superadmin'])->group(function () {
     Route::apiResource('entreprises', EntrepriseController::class);
 });
 
-Route::middleware(['jwt', 'role:admin'])->group(function () {
+Route::middleware(['jwt', 'role:admin,superadmin'])->group(function () {
     Route::apiResource('venues', VenueController::class);
     Route::apiResource('events', EventController::class);
     Route::apiResource('staff', StaffController::class);
@@ -53,6 +54,12 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
     Route::post('events/{event}/tables', [TableController::class, 'store']);
     Route::patch('tables/{table}', [TableController::class, 'update']);
     Route::delete('tables/{table}', [TableController::class, 'destroy']);
+    Route::get('events/{event}/tables/summary', [TableController::class, 'summary']);
+    // Invites
+    Route::get('events/{event}/invites', [InviteController::class, 'index']);
+    Route::post('events/{event}/invites', [InviteController::class, 'store']);
+    Route::put('invites/{invite}', [InviteController::class, 'update']);
+    Route::delete('invites/{invite}', [InviteController::class, 'destroy']);
 });
 
 // Users management (admins of entreprise and superadmins)

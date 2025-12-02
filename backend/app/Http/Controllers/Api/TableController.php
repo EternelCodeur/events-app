@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\EventTableResource;
 use App\Models\Event;
 use App\Models\EventTable;
+use App\Models\Invite;
 use Illuminate\Http\Request;
 
 class TableController extends Controller
@@ -19,6 +20,30 @@ class TableController extends Controller
         $query = EventTable::where('event_id', $event->id)->latest();
         $items = $query->get();
         return EventTableResource::collection($items);
+    }
+
+    public function summary(Request $request, Event $event)
+    {
+        $user = $request->user();
+        if (($user->role ?? 'admin') !== 'superadmin' && (int)$event->entreprise_id !== (int)$user->entreprise_id) {
+            abort(403, 'Forbidden');
+        }
+        $tables = EventTable::where('event_id', $event->id)->orderBy('id', 'asc')->get();
+        $result = $tables->map(function ($t) {
+            $total = (int) ($t->capacity ?? 0);
+            $used = (int) Invite::where('event_table_id', $t->id)->sum('personnes');
+            $remaining = $total > 0 ? max($total - $used, 0) : null;
+            $isFull = $total > 0 ? ($used >= $total) : false;
+            return [
+                'id' => (int) $t->id,
+                'nom' => (string) $t->name,
+                'places_total' => $total,
+                'places_utilisees' => $used,
+                'remaining' => $remaining,
+                'isFull' => $isFull,
+            ];
+        });
+        return response()->json($result);
     }
 
     public function store(Request $request, Event $event)
