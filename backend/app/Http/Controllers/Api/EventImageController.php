@@ -37,7 +37,9 @@ class EventImageController extends Controller
     {
         $user = $request->user();
         if (($user->role ?? 'admin') !== 'superadmin') {
-            abort(403, 'Forbidden');
+            if ((int) $event->entreprise_id !== (int) ($user->entreprise_id ?? 0)) {
+                abort(403, 'Forbidden');
+            }
         }
         if (in_array($event->status, ['annuler', 'echoue'], true)) {
             abort(422, 'Ajout d\'images non autorisé pour cet événement');
@@ -102,7 +104,9 @@ class EventImageController extends Controller
         $user = $request->user();
         $event = Event::findOrFail($image->event_id);
         if (($user->role ?? 'admin') !== 'superadmin') {
-            abort(403, 'Forbidden');
+            if ((int) $event->entreprise_id !== (int) ($user->entreprise_id ?? 0)) {
+                abort(403, 'Forbidden');
+            }
         }
         if (!empty($image->file_path)) {
             Storage::disk('local')->delete($image->file_path);

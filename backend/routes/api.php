@@ -19,10 +19,11 @@ use App\Http\Controllers\Api\VenueImageController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
+    // refresh hors middleware jwt pour autoriser un token expiré
+    Route::post('refresh', [AuthController::class, 'refresh']);
     Route::middleware('jwt')->group(function () {
         Route::get('me', [AuthController::class, 'me']);
         Route::post('logout', [AuthController::class, 'logout']);
-        Route::post('refresh', [AuthController::class, 'refresh']);
     });
 });
 

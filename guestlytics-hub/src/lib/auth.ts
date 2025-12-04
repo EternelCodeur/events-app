@@ -19,13 +19,14 @@ const TOKEN_SESSION_KEY = "guestlytics_auth_token_session";
 
 export function getToken(): string | null {
   if (currentToken) return currentToken;
-  try {
-    const s = sessionStorage.getItem(TOKEN_SESSION_KEY);
-    if (s) return (currentToken = s);
-  } catch { /* noop */ }
+  // Prefer persistent token if available to avoid stale session token overriding it
   try {
     const p = localStorage.getItem(TOKEN_KEY);
     if (p) return (currentToken = p);
+  } catch { /* noop */ }
+  try {
+    const s = sessionStorage.getItem(TOKEN_SESSION_KEY);
+    if (s) return (currentToken = s);
   } catch { /* noop */ }
   return null;
 }
@@ -33,14 +34,25 @@ export function getToken(): string | null {
 function persistAuth(user: AuthUser, token: string, remember: boolean) {
   currentUser = user;
   currentToken = token;
-  try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    sessionStorage.setItem(TOKEN_SESSION_KEY, token);
-  } catch { /* noop */ }
   if (remember) {
+    // Persist in localStorage and clear session copies to avoid dual tokens
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
       localStorage.setItem(TOKEN_KEY, token);
+    } catch { /* noop */ }
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(TOKEN_SESSION_KEY);
+    } catch { /* noop */ }
+  } else {
+    // Session-only: store in sessionStorage and clear any persistent copies
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      sessionStorage.setItem(TOKEN_SESSION_KEY, token);
+    } catch { /* noop */ }
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(TOKEN_KEY);
     } catch { /* noop */ }
   }
 }
@@ -95,15 +107,15 @@ export async function logout(): Promise<void> {
 
 export async function getMe(): Promise<AuthUser | null> {
   if (currentUser) return currentUser;
-  // rehydrate from storage
-  try {
-    const sUser = sessionStorage.getItem(SESSION_KEY);
-    if (sUser) currentUser = (JSON.parse(sUser) as AuthUser) ?? null;
-  } catch { currentUser = null; }
-  if (currentUser) return currentUser;
+  // rehydrate from storage (prefer persistent if both are present)
   try {
     const lUser = localStorage.getItem(STORAGE_KEY);
     if (lUser) currentUser = (JSON.parse(lUser) as AuthUser) ?? null;
+  } catch { currentUser = null; }
+  if (currentUser) return currentUser;
+  try {
+    const sUser = sessionStorage.getItem(SESSION_KEY);
+    if (sUser) currentUser = (JSON.parse(sUser) as AuthUser) ?? null;
   } catch { currentUser = null; }
   if (currentUser) return currentUser;
   // fetch from backend if token exists
@@ -134,7 +146,15 @@ export async function refresh(): Promise<boolean> {
   if (!token) return false;
   try {
     const res = await fetch("/api/auth/refresh", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      currentUser = null;
+      currentToken = null;
+      try { localStorage.removeItem(STORAGE_KEY); } catch { /* empty */ }
+      try { localStorage.removeItem(TOKEN_KEY); } catch { /* empty */ }
+      try { sessionStorage.removeItem(SESSION_KEY); } catch { /* empty */ }
+      try { sessionStorage.removeItem(TOKEN_SESSION_KEY); } catch { /* empty */ }
+      return false;
+    }
     const data = (await res.json()) as Record<string, unknown>;
     const newToken = data?.access_token as string | undefined;
     if (!newToken) return false;

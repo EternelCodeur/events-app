@@ -130,3 +130,12 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .bg-landing-gradient {
+    background: radial-gradient(95rem 95rem at -10% -10%, rgba(37,99,235,0.45), transparent 60%),
+                radial-gradient(80rem 80rem at 110% 0%, rgba(34,197,94,0.36), transparent 60%),
+                radial-gradient(40rem 40rem at 50% 120%, rgba(245,158,11,0.36), transparent 60%),
+                linear-gradient(180deg, rgba(255,255,255,0.80), rgba(255,255,255,0.80));
+  }
+}

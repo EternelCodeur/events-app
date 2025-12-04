@@ -30,6 +30,10 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
     const txt = await res.text();
     throw new Error(txt || `HTTP ${res.status}`);
   }
+  const method = (init.method || 'GET').toUpperCase();
+  if (res.status === 204 || res.status === 205 || method === 'DELETE') {
+    return undefined as T;
+  }
   return (await res.json()) as T;
 }
 

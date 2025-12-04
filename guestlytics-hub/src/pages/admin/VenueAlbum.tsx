@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { getEventImages, getImageBlobUrl, deleteEventImage } from "@/lib/eventImages";
+import { getVenueImages, getVenueImageBlobUrl, deleteVenueImage } from "@/lib/venueImages";
 import { ChevronLeft, ChevronRight, Download, RefreshCcw, X, CheckSquare, Square } from "lucide-react";
 
 export type AlbumImage = {
@@ -12,7 +12,7 @@ export type AlbumImage = {
   blobUrl: string;
 };
 
-const EventAlbum: React.FC = () => {
+export default function VenueAlbum() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -20,7 +20,6 @@ const EventAlbum: React.FC = () => {
   const [images, setImages] = useState<AlbumImage[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
-  // Lightbox
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -34,15 +33,14 @@ const EventAlbum: React.FC = () => {
       setLoading(true);
       setError("");
       try {
-        const list = await getEventImages(id);
+        const list = await getVenueImages(id);
         const urls = await Promise.all(list.map(async (it) => ({
           id: it.id,
           name: it.originalName || `image-${it.id}`,
-          blobUrl: await getImageBlobUrl(it.id),
+          blobUrl: await getVenueImageBlobUrl(it.id),
         })));
         if (!cancelled) {
           setImages(urls);
-          // preserve selection for ids still present
           setSelected((prev) => {
             const next: Record<string, boolean> = {};
             urls.forEach(u => { next[u.id] = Boolean(prev[u.id]); });
@@ -60,15 +58,10 @@ const EventAlbum: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    return () => {
-      // Cleanup blob URLs
-      images.forEach(img => URL.revokeObjectURL(img.blobUrl));
-    };
+    return () => { images.forEach(img => URL.revokeObjectURL(img.blobUrl)); };
   }, [images]);
 
-  const toggleSelect = (img: AlbumImage) => {
-    setSelected((prev) => ({ ...prev, [img.id]: !prev[img.id] }));
-  };
+  const toggleSelect = (img: AlbumImage) => setSelected((prev) => ({ ...prev, [img.id]: !prev[img.id] }));
   const selectAll = () => setSelected(images.reduce((acc, it) => ({ ...acc, [it.id]: true }), {} as Record<string, boolean>));
   const clearSelection = () => setSelected({});
 
@@ -79,7 +72,7 @@ const EventAlbum: React.FC = () => {
   async function downloadBlobUrl(url: string, filename: string) {
     try {
       const a = document.createElement("a");
-      a.href = url; // direct blob URL; ne pas révoquer ici car utilisé par l'UI
+      a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
@@ -93,7 +86,7 @@ const EventAlbum: React.FC = () => {
 
   const deleteOne = async (img: AlbumImage) => {
     try {
-      await deleteEventImage(img.id);
+      await deleteVenueImage(img.id);
       URL.revokeObjectURL(img.blobUrl);
       setImages((prev) => prev.filter((i) => i.id !== img.id));
       setSelected((prev) => {
@@ -108,23 +101,21 @@ const EventAlbum: React.FC = () => {
   const downloadSelected = async () => {
     const sel = images.filter(it => selected[it.id]);
     for (const it of sel) {
-      // séquentiel pour éviter les blocages navigateurs
       await downloadBlobUrl(it.blobUrl, it.name || `image-${it.id}`);
     }
   };
 
   const refresh = () => {
-    // trigger reload by resetting deps
     (async () => {
       if (!id) return;
       setLoading(true);
       setError("");
       try {
-        const list = await getEventImages(id);
+        const list = await getVenueImages(id);
         const urls = await Promise.all(list.map(async (it) => ({
           id: it.id,
           name: it.originalName || `image-${it.id}`,
-          blobUrl: await getImageBlobUrl(it.id),
+          blobUrl: await getVenueImageBlobUrl(it.id),
         })));
         setImages(urls);
         setSelected({});
@@ -140,7 +131,7 @@ const EventAlbum: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Album de l'événement</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Images de la salle</h1>
           {error && <div className="text-destructive text-sm">{error}</div>}
           {loading && <div className="text-sm text-muted-foreground">Chargement...</div>}
         </div>
@@ -205,7 +196,6 @@ const EventAlbum: React.FC = () => {
         )}
       </div>
 
-      {/* Lightbox */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
         <DialogContent className="max-w-5xl" aria-describedby={undefined}>
           <DialogHeader className="sr-only">
@@ -259,6 +249,4 @@ const EventAlbum: React.FC = () => {
       </Dialog>
     </div>
   );
-};
-
-export default EventAlbum;
+}

@@ -53,7 +53,21 @@ class JwtMiddleware
                 }
             }
         } catch (\Throwable $e) {
-            abort(401, 'Token invalide');
+            // Pour l'endpoint de refresh, on autorise un token expiré: on vérifie uniquement la signature
+            if ($request->is('api/auth/refresh')) {
+                $payload = $this->verifySignatureAndDecodePayload($token);
+                if (!$payload || empty($payload['sub'])) {
+                    abort(401, 'Token invalide');
+                }
+                $user = \App\Models\User::find($payload['sub']);
+                if (!$user) {
+                    abort(401, 'Utilisateur introuvable');
+                }
+                Auth::setUser($user);
+                $request->setUserResolver(fn () => $user);
+            } else {
+                abort(401, 'Token invalide');
+            }
         }
 
         return $next($request);
@@ -68,5 +82,40 @@ class JwtMiddleware
             return (string) base64_decode(substr($appKey, 7));
         }
         return $appKey;
+    }
+
+    /**
+     * Vérifie la signature HMAC SHA-256 du JWT et retourne le payload sans valider 'exp'.
+     * @return array<string, mixed>|null
+     */
+    private function verifySignatureAndDecodePayload(string $token): ?array
+    {
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            return null;
+        }
+        [$h, $p, $sig] = $parts;
+        $secret = $this->getSecret();
+        $expected = $this->base64UrlEncode(hash_hmac('sha256', $h . '.' . $p, $secret, true));
+        if (!hash_equals($expected, $sig)) {
+            return null;
+        }
+        $json = $this->base64UrlDecode($p);
+        $data = json_decode($json, true);
+        return is_array($data) ? $data : null;
+    }
+
+    private function base64UrlEncode(string $data): string
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    private function base64UrlDecode(string $data): string
+    {
+        $remainder = strlen($data) % 4;
+        if ($remainder) {
+            $data .= str_repeat('=', 4 - $remainder);
+        }
+        return base64_decode(strtr($data, '-_', '+/')) ?: '';
     }
 }

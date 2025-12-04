@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use App\Models\Entreprise;
 use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 
 class AuthController extends Controller
 {
@@ -51,14 +52,37 @@ class AuthController extends Controller
         return response()->json(['message' => 'Déconnecté']);
     }
 
-    public function refresh()
+    public function refresh(Request $request)
     {
-        $user = Auth::user();
+        // Support refresh sans middleware jwt: lire le token Bearer et accepter les tokens expirés
+        $auth = (string) $request->header('Authorization', '');
+        if (!str_starts_with($auth, 'Bearer ')) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+        $token = substr($auth, 7);
+        if (!$token) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        $userId = null;
+        try {
+            $secret = $this->getSecret();
+            $decoded = JWT::decode($token, new Key($secret, 'HS256'));
+            $userId = $decoded->sub ?? null;
+        } catch (\Throwable $e) {
+            // Token potentiellement expiré: vérifier uniquement la signature et décoder le payload
+            $payload = $this->verifySignatureAndDecodePayload($token);
+            $userId = is_array($payload) ? ($payload['sub'] ?? null) : null;
+        }
+        if (!$userId) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+        $user = User::find($userId);
         if (! $user) {
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
-        $token = $this->issueToken($user->id, $user->role ?? null);
-        return $this->respondWithToken($token, $user);
+        $tokenNew = $this->issueToken($user->id, $user->role ?? null);
+        return $this->respondWithToken($tokenNew, $user);
     }
 
     protected function respondWithToken(string $token, User $user)
@@ -122,5 +146,40 @@ class AuthController extends Controller
             return (string) base64_decode(substr($appKey, 7));
         }
         return $appKey;
+    }
+
+    /**
+     * Vérifie la signature HMAC SHA-256 du JWT et retourne le payload sans valider 'exp'.
+     * @return array<string, mixed>|null
+     */
+    private function verifySignatureAndDecodePayload(string $token): ?array
+    {
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            return null;
+        }
+        [$h, $p, $sig] = $parts;
+        $secret = $this->getSecret();
+        $expected = $this->base64UrlEncode(hash_hmac('sha256', $h . '.' . $p, $secret, true));
+        if (!hash_equals($expected, $sig)) {
+            return null;
+        }
+        $json = $this->base64UrlDecode($p);
+        $data = json_decode($json, true);
+        return is_array($data) ? $data : null;
+    }
+
+    private function base64UrlEncode(string $data): string
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    private function base64UrlDecode(string $data): string
+    {
+        $remainder = strlen($data) % 4;
+        if ($remainder) {
+            $data .= str_repeat('=', 4 - $remainder);
+        }
+        return base64_decode(strtr($data, '-_', '+/')) ?: '';
     }
 }

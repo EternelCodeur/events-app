@@ -15,8 +15,6 @@ export const ProtectedRoute = ({ allowedRoles, children }: ProtectedRouteProps) 
     return (
       <div className="w-screen h-screen flex items-center justify-center">
         <div className="text-sm text-muted-foreground">Chargement…</div>
-        {/* Optionally render children to keep layout visible during loading */}
-        <div style={{ display: 'none' }}>{children}</div>
       </div>
     );
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;

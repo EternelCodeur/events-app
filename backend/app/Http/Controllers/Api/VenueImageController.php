@@ -94,7 +94,9 @@ class VenueImageController extends Controller
         $user = $request->user();
         $venue = Venue::findOrFail($image->venue_id);
         if (($user->role ?? 'admin') !== 'superadmin') {
-            abort(403, 'Forbidden');
+            if ((int)$venue->entreprise_id !== (int)($user->entreprise_id ?? 0)) {
+                abort(403, 'Forbidden');
+            }
         }
         if (!empty($image->file_path)) {
             Storage::disk('local')->delete($image->file_path);

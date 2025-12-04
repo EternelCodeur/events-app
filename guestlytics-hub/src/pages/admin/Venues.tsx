@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Search, Pencil, Trash2, MapPin, Eye, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ const statusLabels: Record<VenueStatus, string> = {
 };
 
 const Venues = () => {
+  const navigate = useNavigate();
   const [venues, setVenues] = useState<VenueItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"tous" | VenueStatus>("tous");
@@ -104,16 +106,7 @@ const Venues = () => {
 
   const openAddPhotos = (id: string) => { setSelectedVenueId(id); setPickerOpen(true); };
   const openViewPhotos = async (id: string) => {
-    setSelectedVenueId(id);
-    setGalleryImages([]);
-    setGalleryOpen(true);
-    try {
-      const items = await getVenueImages(id);
-      const urls = await Promise.all(items.map((it) => getVenueImageBlobUrl(it.id)));
-      setGalleryImages(urls);
-    } catch (_) {
-      setGalleryImages([]);
-    }
+    navigate(`/admin/venues/${id}/album`);
   };
 
   const openEditDialog = (venue: VenueItem) => {

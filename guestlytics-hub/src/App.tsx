@@ -16,7 +16,9 @@ import StaffAttendancePage from "./pages/admin/StaffAttendancePage";
 import Venues from "./pages/admin/Venues";
 import Users from "./pages/admin/Users";
 import EventAlbum from "./pages/admin/EventAlbum";
+import VenueAlbum from "./pages/admin/VenueAlbum";
 import NotFound from "./pages/NotFound";
+import Landing from "./pages/Landing";
 import Companies from "./pages/super-admin/Companies";
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
 import CompanyEvents from "./pages/super-admin/CompanyEvents";
@@ -33,7 +35,7 @@ const queryClient = new QueryClient();
 const router = createBrowserRouter(
   [
     // Auth
-    { path: "/", element: <Login /> },
+    { path: "/", element: <Landing /> },
     { path: "/login", element: <Login /> },
 
     // Admin
@@ -103,6 +105,16 @@ const router = createBrowserRouter(
         <ProtectedRoute allowedRoles={["admin"]}>
           <AppLayout>
             <EventAlbum />
+          </AppLayout>
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: "/admin/venues/:id/album",
+      element: (
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <AppLayout>
+            <VenueAlbum />
           </AppLayout>
         </ProtectedRoute>
       ),
