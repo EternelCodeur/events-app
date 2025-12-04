@@ -26,13 +26,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { useUser } from "@/context/UserContext";
+import { logout as apiLogout } from "@/lib/auth";
 
 interface AppLayoutProps {
   children: ReactNode;
 }
 
 export const AppLayout = ({ children }: AppLayoutProps) => {
-  const { role, user } = useUser();
+  const { role, user, setUser } = useUser();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -105,6 +106,16 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
     return found?.value ?? "dashboard";
   })();
 
+  const handleLogout = async () => {
+    try {
+      await apiLogout();
+    } catch {
+      /* noop */
+    }
+    setUser(null);
+    navigate("/login", { replace: true });
+  };
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       {/* Main Content */}
@@ -114,7 +125,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
           <div className="flex items-center gap-4">
             {role === "superadmin" ? (
               <div className="flex items-center gap-2">
-                <img src="/ng-events.png" alt="Logo" className="h-17 w-32" />
+                <img src="/ng-events.png" alt="Logo" className="h-16 w-16" />
               </div>
             ) : (
               <h1 className="text-xl font-semibold text-foreground flex items-center gap-2">
@@ -169,7 +180,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
                   <LogOut className="mr-2 h-4 w-4" />
                   <button
                     type="button"
-                    onClick={() => navigate("/login")}
+                    onClick={handleLogout}
                     className="w-full text-left"
                   >
                     Déconnexion

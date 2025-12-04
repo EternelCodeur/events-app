@@ -16,7 +16,10 @@ export default function Landing() {
     <div className="min-h-screen relative text-foreground flex flex-col bg-landing-gradient">
       <header className={`fixed top-0 left-0 right-0 z-20 w-full text-white border-b border-blue-800 transition-colors duration-300 ${scrolled ? 'bg-blue-900/80 backdrop-blur-sm shadow-md' : 'bg-blue-900 shadow-sm'}`}>
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <img src="/ng-events.png" alt="Logo" className="h-16 w-16 bg-white/80 p-2 rounded-full shadow" />
           <div className="text-xl font-bold">OKOUME EVENTS</div>
+          </div>
           <div className="space-x-3">
             <Button className="bg-white text-blue-900 hover:bg-white/90" onClick={() => navigate("/login")}>Se connecter</Button>
           </div>
@@ -99,7 +102,7 @@ export default function Landing() {
 
       <footer className="relative bg-black z-10 w-full border-t border-border">
         <div className="max-w-6xl flex justify-between mx-auto px-6 py-6 text-xs text-muted-foreground">
-          <div className="text-white text-md font-bold">© {new Date().getFullYear()} OKOUME EVENTS — Tous droits réservés</div>
+          <div className="text-white text-md font-bold">© {new Date().getFullYear()} Okoumé EVENTS — Tous droits réservés</div>
           <div className="mt-1 text-white text-md font-bold">Développé par <a href="https://eternelcodeur.vercel.app" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-500">EternelCodeur</a></div>
         </div>
       </footer>
