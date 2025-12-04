@@ -14,6 +14,21 @@ use Illuminate\Support\Str;
 
 class EventController extends Controller
 {
+    public function agentIndex(Request $request)
+    {
+        $user = $request->user();
+        $query = Event::query()->whereIn('status', ['en_attente', 'confirme', 'en_cours'])->orderByDesc('id');
+        if (($user->role ?? 'admin') !== 'superadmin') {
+            $query->where('entreprise_id', $user->entreprise_id);
+        } else {
+            if ($request->filled('entrepriseId')) {
+                $query->where('entreprise_id', (int) $request->integer('entrepriseId'));
+            }
+        }
+        $events = $query->get();
+        return EventResource::collection($events);
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();

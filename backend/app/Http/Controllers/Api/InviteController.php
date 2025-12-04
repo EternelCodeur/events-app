@@ -12,6 +12,20 @@ use Illuminate\Support\Facades\DB;
 
 class InviteController extends Controller
 {
+    public function agentIndex(Request $request, Event $event)
+    {
+        $user = $request->user();
+        if (($user->role ?? 'admin') !== 'superadmin' && (int)$event->entreprise_id !== (int)$user->entreprise_id) {
+            abort(403, 'Forbidden');
+        }
+        if (!in_array((string) $event->status, ['en_attente', 'confirme', 'en_cours'], true)) {
+            // Event not eligible for hostess view
+            return InviteResource::collection(collect());
+        }
+        $items = Invite::where('event_id', $event->id)->latest()->get();
+        return InviteResource::collection($items);
+    }
+
     public function index(Request $request, Event $event)
     {
         $user = $request->user();
@@ -62,6 +76,17 @@ class InviteController extends Controller
             $cap = (int) ($table->capacity ?? 0);
             if ($cap > 0 && ($used + (int)$data['personnes']) > $cap) {
                 abort(422, "Cette table n'a pas assez de places disponibles");
+            }
+        }
+
+        // Enforce event-level capacity: total invited persons must not exceed event guests
+        $max = (int) ($event->guests ?? 0);
+        if ($max > 0) {
+            $currentUsed = (int) Invite::where('event_id', $event->id)->sum('personnes');
+            $incoming = (int) $data['personnes'];
+            if ($currentUsed + $incoming > $max) {
+                $remaining = max($max - $currentUsed, 0);
+                abort(422, "Capacité événement dépassée: total invités proposé (" . ($currentUsed + $incoming) . ") > " . $max . ". Places restantes: " . $remaining . ".");
             }
         }
 
@@ -131,6 +156,19 @@ class InviteController extends Controller
             $cap = (int) ($newTable->capacity ?? 0);
             if ($cap > 0 && ($used + $newPersonnes) > $cap) {
                 abort(422, "Cette table n'a pas assez de places disponibles");
+            }
+        }
+
+        // Enforce event-level capacity on update
+        $ev = $invite->event;
+        $maxEvent = (int) ($ev?->guests ?? 0);
+        if ($maxEvent > 0) {
+            $currentUsed = (int) Invite::where('event_id', $invite->event_id)
+                ->where('id', '<>', $invite->id)
+                ->sum('personnes');
+            if ($currentUsed + $newPersonnes > $maxEvent) {
+                $remaining = max($maxEvent - $currentUsed, 0);
+                abort(422, "Capacité événement dépassée: total invités proposé (" . ($currentUsed + $newPersonnes) . ") > " . $maxEvent . ". Places restantes: " . $remaining . ".");
             }
         }
 

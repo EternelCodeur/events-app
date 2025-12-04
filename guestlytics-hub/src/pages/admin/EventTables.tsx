@@ -61,6 +61,7 @@ const EventTables = () => {
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [eventStatus, setEventStatus] = useState<string | undefined>(undefined);
   const [eventTitle, setEventTitle] = useState<string>("");
+  const [eventCapacity, setEventCapacity] = useState<number>(0);
 
   const [formName, setFormName] = useState("");
   const [formCapacity, setFormCapacity] = useState("");
@@ -72,6 +73,9 @@ const EventTables = () => {
         const ev = await getEvent(id);
         setEventStatus((ev as { status?: string }).status);
         setEventTitle((ev as { title?: string }).title || "");
+        // capacity source: prefer explicit capacity then guests
+        const cap = (ev as { capacity?: number; guests?: number }).capacity ?? (ev as { guests?: number }).guests ?? 0;
+        setEventCapacity(Number(cap) || 0);
         const ts = await apiGetTables(id);
         setTables(ts as TableItem[]);
       } catch {
@@ -108,6 +112,14 @@ const EventTables = () => {
       `${table.name}`.toLowerCase().includes(term),
     );
   }, [tables, searchTerm]);
+
+  const totalTableCapacity = useMemo(() => {
+    return tables.reduce((sum, t) => sum + Number(t.capacity || 0), 0);
+  }, [tables]);
+
+  const remainingCapacity = useMemo(() => {
+    return eventCapacity > 0 ? Math.max(0, eventCapacity - totalTableCapacity) : undefined;
+  }, [eventCapacity, totalTableCapacity]);
 
   // Preload table assignments so they are visible immediately (even post-event)
   useEffect(() => {
@@ -209,6 +221,15 @@ const EventTables = () => {
     const capacityValue = Number(formCapacity);
     if (Number.isNaN(capacityValue) || capacityValue <= 0) return;
 
+    // Enforce that sum of table capacities does not exceed event capacity
+    const baseTotal = editingTable ? (totalTableCapacity - Number(editingTable.capacity || 0)) : totalTableCapacity;
+    const proposedTotal = baseTotal + capacityValue;
+    if (eventCapacity > 0 && proposedTotal > eventCapacity) {
+      const remaining = Math.max(0, eventCapacity - baseTotal);
+      alert(`Capacité dépassée: total proposé ${proposedTotal} > capacité événement ${eventCapacity}. Places restantes: ${remaining}.`);
+      return;
+    }
+
     (async () => {
       try {
         if (editingTable) {
@@ -255,12 +276,33 @@ const EventTables = () => {
             type="button"
             className="bg-primary hover:bg-primary-hover"
             onClick={openCreateDialog}
-            disabled={eventStatus === "termine" || eventStatus === "annuler" || eventStatus === "echoue"}
+            disabled={eventStatus === "termine" || eventStatus === "annuler" || eventStatus === "echoue" || (remainingCapacity !== undefined && remainingCapacity <= 0)}
           >
             <Plus className="w-4 h-4 mr-2" /> Nouvelle table
           </Button>
         </div>
       </div>
+
+      {eventCapacity > 0 && (
+        <Card>
+          <CardContent className="p-4 flex flex-wrap items-center gap-6">
+            <div className="text-sm text-foreground">
+              Capacité de l'événement: <span className="font-semibold">{eventCapacity}</span>
+            </div>
+            <div className="text-sm text-foreground">
+              Somme des tables: <span className="font-semibold">{totalTableCapacity}</span>
+            </div>
+            <div className={`text-sm ${remainingCapacity !== undefined && remainingCapacity <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+              Places restantes: <span className="font-semibold">{Math.max(0, eventCapacity - totalTableCapacity)}</span>
+            </div>
+            {totalTableCapacity > eventCapacity && (
+              <div className="text-sm text-red-600 font-medium">
+                Attention: le total des capacités de tables dépasse la capacité de l'événement.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search */}
       <Card>
@@ -397,11 +439,17 @@ const EventTables = () => {
                 <Input
                   type="number"
                   min={1}
+                  max={eventCapacity > 0 ? (editingTable ? Math.max(1, eventCapacity - tables.reduce((sum, t) => sum + (t.id === editingTable.id ? 0 : Number(t.capacity || 0)), 0)) : Math.max(1, eventCapacity - totalTableCapacity)) : undefined}
                   value={formCapacity}
                   onChange={(e) => setFormCapacity(e.target.value)}
                   placeholder="Ex: 10"
                   required
                 />
+                {eventCapacity > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Places restantes pour l'événement: {editingTable ? Math.max(0, eventCapacity - (totalTableCapacity - Number(editingTable.capacity || 0))) : Math.max(0, eventCapacity - totalTableCapacity)}
+                  </p>
+                )}
               </div>
             </div>
 

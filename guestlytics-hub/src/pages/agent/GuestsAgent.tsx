@@ -18,79 +18,96 @@ const GuestsAgent = () => {
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
   const { toast } = useToast();
 
-  const mockedGuests = [
-    {
-      id: 1,
-      eventId: 1,
-      nom: "DUBOIS",
-      prenom: "Marie",
-      cote: "mariee",
-      personnes: 2,
-      table: "Table 1",
-      statut: "confirmed",
-      telephone: "06 12 34 56 78",
-      present: false,
-      heureArrivee: null,
-      additionalGuests: ["Alice"],
-    },
-    {
-      id: 4,
-      eventId: 2,
-      nom: "DUPONT",
-      prenom: "Julie",
-      cote: "marie",
-      personnes: 1,
-      table: "Table 2",
-      statut: "pending",
-      telephone: "06 99 88 77 66",
-      present: false,
-      heureArrivee: null,
-    },
-    {
-      id: 2,
-      eventId: 1,
-      nom: "MARTIN",
-      prenom: "Jean",
-      cote: "marie",
-      personnes: 1,
-      table: "Table 2",
-      statut: "confirmed",
-      telephone: "06 98 76 54 32",
-      present: true,
-      heureArrivee: "2024-06-01T14:30:00Z",
-    },
-    {
-      id: 3,
-      eventId: 2,
-      nom: "DURAND",
-      prenom: "Sophie",
-      cote: "mariee",
-      personnes: 3,
-      table: "Table 1",
-      statut: "confirmed",
-      telephone: "06 11 22 33 44",
-      present: false,
-      heureArrivee: null,
-    },
-  ];
+  type AgentEvent = { id: string; title: string; startTime?: string | null; endTime?: string | null; date: string; status: string };
+  type AgentInvite = { id: number; nom: string; prenom: string; telephone?: string; personnes: number; table_name?: string; present?: boolean; heure_arrivee?: string | null; additionalGuests?: string[] };
 
-  const [allGuests, setAllGuests] = useState<any[]>(mockedGuests);
-  const [selectedEventId, setSelectedEventId] = useState<number>(1);
+  async function getAuthHeader(): Promise<HeadersInit> {
+    try {
+      const { getToken } = await import("@/lib/auth");
+      const token = getToken();
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    } catch {
+      return {};
+    }
+  }
+
+  async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
+    const auth = await getAuthHeader();
+    let res = await fetch(path, { credentials: "include", ...init, headers: { ...(init.headers || {}), ...(auth as HeadersInit) } });
+    if (res.status === 401) {
+      try {
+        const { refresh } = await import("@/lib/auth");
+        const ok = await refresh();
+        if (ok) {
+          const retryAuth = await getAuthHeader();
+          res = await fetch(path, { credentials: "include", ...init, headers: { ...(init.headers || {}), ...(retryAuth as HeadersInit) } });
+        }
+      } catch { /* noop */ }
+    }
+    return res;
+  }
+
+  const [events, setEvents] = useState<AgentEvent[]>([]);
+  const [allGuests, setAllGuests] = useState<any[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
-  const mockEvents = [
-    {
-      id: 1,
-      name: "Mariage Dupont (21h-02h)",
-    },
-    {
-      id: 2,
-      name: "Conférence Matinale (08h-12h)",
-    },
-  ];
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetchWithAuth(`/api/agent/events`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        const list = Array.isArray(payload) ? payload : (payload.data ?? []);
+        const mapped: AgentEvent[] = list.map((e: any) => ({
+          id: String(e.id),
+          title: String(e.title),
+          startTime: e.startTime ?? null,
+          endTime: e.endTime ?? null,
+          date: String(e.date),
+          status: String(e.status),
+        }));
+        setEvents(mapped);
+        if (mapped.length > 0) setSelectedEventId(mapped[0].id);
+      } catch (e: any) {
+        toast({ title: "Erreur", description: e?.message || "Chargement des événements impossible", variant: "destructive" });
+      }
+    })();
+  }, [toast]);
+
+  useEffect(() => {
+    (async () => {
+      if (!selectedEventId) { setAllGuests([]); return; }
+      try {
+        setLoading(true);
+        const res = await fetchWithAuth(`/api/agent/events/${encodeURIComponent(selectedEventId)}/invites`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        const list = Array.isArray(payload) ? payload : (payload.data ?? []);
+        const mapped = list.map((i: AgentInvite) => ({
+          id: Number((i as any).id),
+          eventId: selectedEventId,
+          nom: i.nom,
+          prenom: i.prenom,
+          personnes: Number(i.personnes || 0),
+          table_name: (i as any).table_name,
+          statut: (i as any).statut,
+          telephone: i.telephone,
+          present: !!(i as any).present,
+          heureArrivee: (i as any).heure_arrivee ?? null,
+          additionalGuests: Array.isArray((i as any).additionalGuests) ? (i as any).additionalGuests : [],
+        }));
+        setAllGuests(mapped);
+      } catch (e: any) {
+        toast({ title: "Erreur", description: e?.message || "Chargement des invités impossible", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [selectedEventId, toast]);
 
   const guestsForEvent = useMemo(
-    () => allGuests.filter((g) => g.eventId === selectedEventId),
+    () => allGuests.filter((g) => String(g.eventId) === String(selectedEventId)),
     [allGuests, selectedEventId],
   );
 
@@ -197,13 +214,17 @@ const GuestsAgent = () => {
             aria-label="Sélectionner un événement"
             className="border rounded-md bg-white/90 px-4 py-1.5 text-xs sm:text-sm text-foreground"
             value={selectedEventId}
-            onChange={(e) => setSelectedEventId(Number(e.target.value))}
+            onChange={(e) => setSelectedEventId(String(e.target.value))}
           >
-            {mockEvents.map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name}
-              </option>
-            ))}
+            {events.map((ev) => {
+              const timeLabel = [ev.startTime, ev.endTime].filter(Boolean).join("-");
+              const label = timeLabel ? `${ev.title} (${timeLabel})` : ev.title;
+              return (
+                <option key={ev.id} value={ev.id}>
+                  {label}
+                </option>
+              );
+            })}
           </select>
         </div>
       </div>

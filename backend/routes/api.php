@@ -82,6 +82,12 @@ Route::middleware(['jwt', 'role:admin,superadmin'])->group(function () {
     Route::get('venue-images/{image}/file', [VenueImageController::class, 'file']);
 });
 
+// Agent (hôtesse) read-only endpoints
+Route::middleware(['jwt', 'role:hotesse,admin,superadmin'])->group(function () {
+    Route::get('agent/events', [EventController::class, 'agentIndex']);
+    Route::get('agent/events/{event}/invites', [InviteController::class, 'agentIndex']);
+});
+
 // Users management (admins of entreprise and superadmins)
 Route::middleware(['jwt', 'role:admin,superadmin'])->group(function () {
     Route::apiResource('users', UsersController::class);

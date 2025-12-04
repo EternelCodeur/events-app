@@ -73,6 +73,17 @@ class TableController extends Controller
             abort(422, 'Cette table existe déjà pour cet événement');
         }
 
+        // Enforce event capacity: total tables capacity must not exceed event guests
+        $max = (int) ($event->guests ?? 0);
+        if ($max > 0) {
+            $currentTotal = (int) EventTable::where('event_id', $event->id)->sum('capacity');
+            $incoming = (int) ($data['capacity'] ?? 0);
+            if ($currentTotal + $incoming > $max) {
+                $remaining = max($max - $currentTotal, 0);
+                abort(422, "Capacité dépassée: la somme des places des tables (" . ($currentTotal + $incoming) . ") dépasse la capacité de l'événement (" . $max . "). Places restantes: " . $remaining . ".");
+            }
+        }
+
         $table = EventTable::create([
             'entreprise_id' => $event->entreprise_id,
             'event_id' => $event->id,
@@ -112,6 +123,18 @@ class TableController extends Controller
             $table->name = $data['name'];
         }
         if (array_key_exists('capacity', $data)) {
+            // Enforce event capacity on update
+            $ev = $table->event;
+            $max = (int) ($ev?->guests ?? 0);
+            if ($max > 0) {
+                $currentTotal = (int) EventTable::where('event_id', $table->event_id)->sum('capacity');
+                $baseTotal = $currentTotal - (int) ($table->capacity ?? 0);
+                $incoming = (int) $data['capacity'];
+                if ($baseTotal + $incoming > $max) {
+                    $remaining = max($max - $baseTotal, 0);
+                    abort(422, "Capacité dépassée: la somme des places des tables (" . ($baseTotal + $incoming) . ") dépasse la capacité de l'événement (" . $max . "). Places restantes: " . $remaining . ".");
+                }
+            }
             $table->capacity = (int) $data['capacity'];
         }
         if (array_key_exists('status', $data)) {
