@@ -86,6 +86,7 @@ Route::middleware(['jwt', 'role:admin,superadmin'])->group(function () {
 Route::middleware(['jwt', 'role:hotesse,admin,superadmin'])->group(function () {
     Route::get('agent/events', [EventController::class, 'agentIndex']);
     Route::get('agent/events/{event}/invites', [InviteController::class, 'agentIndex']);
+    Route::post('agent/invites/{invite}/checkin', [InviteController::class, 'agentCheckin']);
 });
 
 // Users management (admins of entreprise and superadmins)

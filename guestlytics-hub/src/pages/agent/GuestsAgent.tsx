@@ -167,30 +167,35 @@ const GuestsAgent = () => {
     if (!selectedGuest) return;
     try {
       setLoading(true);
+      const res = await fetchWithAuth(`/api/agent/invites/${encodeURIComponent(String(selectedGuest.id))}/checkin`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw { response: { data: err }, message: `HTTP ${res.status}` };
+      }
+      const payload = await res.json();
+      const d = (Array.isArray(payload) ? payload[0] : (payload?.data ?? payload)) as any;
       const updated = {
-        ...selectedGuest,
-        present: true,
-        heureArrivee: new Date().toISOString(),
+        id: Number(d?.id ?? selectedGuest.id),
+        eventId: String(selectedEventId),
+        nom: String(d?.nom ?? selectedGuest.nom),
+        prenom: String(d?.prenom ?? selectedGuest.prenom),
+        personnes: Number(d?.personnes ?? selectedGuest.personnes ?? 0),
+        table_name: (d?.table_name ?? selectedGuest.table_name) as string | undefined,
+        statut: (d?.statut ?? 'confirmed') as 'confirmed' | 'pending',
+        telephone: String(d?.telephone ?? selectedGuest.telephone ?? ''),
+        present: !!(d?.present ?? true),
+        heureArrivee: (d?.heure_arrivee ?? selectedGuest.heureArrivee ?? null) as string | null,
+        additionalGuests: Array.isArray(d?.additionalGuests) ? d.additionalGuests : (selectedGuest.additionalGuests ?? []),
       };
-      toast({
-        title: "Invité marqué comme arrivé",
-        description: `${updated.prenom} ${updated.nom} est présent.`,
-      });
-      setAllGuests((prev) =>
-        prev.map((g) => (g.id === updated.id ? updated : g))
-      );
+      setAllGuests((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
       setSelectedGuest(updated);
+      toast({ title: 'Invité marqué comme arrivé', description: `${updated.prenom} ${updated.nom} est présent.` });
     } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description:
-          e?.response?.data?.message ||
-          e?.message ||
-          "Impossible de marquer comme arrivé",
-        variant: "destructive",
-      });
+      const msg = e?.response?.data?.message || e?.message || 'Impossible de marquer comme arrivé';
+      toast({ title: 'Erreur', description: msg, variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const presentCount = guestsForEvent.reduce(

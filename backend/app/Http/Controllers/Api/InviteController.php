@@ -26,6 +26,29 @@ class InviteController extends Controller
         return InviteResource::collection($items);
     }
 
+    public function agentCheckin(Request $request, Invite $invite)
+    {
+        $user = $request->user();
+        if (($user->role ?? 'admin') !== 'superadmin' && (int)$invite->entreprise_id !== (int)$user->entreprise_id) {
+            abort(403, 'Forbidden');
+        }
+        $event = $invite->event;
+        if ($event && in_array((string) $event->status, ['termine', 'annuler', 'echoue'], true)) {
+            abort(422, "Impossible de marquer la présence pour un événement terminé, annulé ou échoué");
+        }
+        DB::transaction(function () use ($invite) {
+            $time = $invite->heure_arrivee ?: date('H:i:s');
+            DB::table('invites')->where('id', $invite->id)->update([
+                'present' => true,
+                'statut' => 'confirmed',
+                'heure_arrivee' => $time,
+                'updated_at' => now(),
+            ]);
+        });
+        $invite->refresh();
+        return new InviteResource($invite);
+    }
+
     public function index(Request $request, Event $event)
     {
         $user = $request->user();
