@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
+import { getXsrfTokenFromCookie } from '@/lib/auth';
 import { getEvent } from '@/lib/events';
 
 interface Invite {
@@ -58,14 +59,24 @@ async function getAuthHeader(): Promise<HeadersInit> {
 
 async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
   const auth = await getAuthHeader();
-  const res = await fetch(path, { credentials: "include", ...init, headers: { ...(init.headers || {}), ...(auth as HeadersInit) } });
+  const method = String((init.method || 'GET')).toUpperCase();
+  const xsrf = getXsrfTokenFromCookie();
+  const headers: HeadersInit = { ...(init.headers || {}), ...(auth as HeadersInit) };
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && xsrf) {
+    (headers as any)['X-XSRF-TOKEN'] = xsrf;
+  }
+  const res = await fetch(path, { credentials: "include", ...init, headers });
   if (res.status === 401) {
     try {
       const { refresh } = await import("@/lib/auth");
       const ok = await refresh();
       if (ok) {
         const retryAuth = await getAuthHeader();
-        return fetch(path, { credentials: "include", ...init, headers: { ...(init.headers || {}), ...(retryAuth as HeadersInit) } });
+        const retryHeaders: HeadersInit = { ...(init.headers || {}), ...(retryAuth as HeadersInit) };
+        if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && xsrf) {
+          (retryHeaders as any)['X-XSRF-TOKEN'] = xsrf;
+        }
+        return fetch(path, { credentials: "include", ...init, headers: retryHeaders });
       }
     } catch { /* noop */ }
   }
@@ -245,10 +256,11 @@ const Invites = () => {
         additionalGuests: (data.additionalGuests ?? []).filter((s: string) => s && s.trim().length > 0),
       };
       const auth = await getAuthHeader();
+      const xsrf = getXsrfTokenFromCookie();
       const res = await fetch(`/api/events/${encodeURIComponent(id || '')}/invites`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...(auth as HeadersInit) },
+        headers: { 'Content-Type': 'application/json', ...(auth as HeadersInit), ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -295,10 +307,11 @@ const Invites = () => {
         additionalGuests: (data.additionalGuests ?? []).filter((s: string) => s && s.trim().length > 0),
       };
       const auth = await getAuthHeader();
+      const xsrf = getXsrfTokenFromCookie();
       const res = await fetch(`/api/invites/${editingId}`, {
         method: 'PUT',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...(auth as HeadersInit) },
+        headers: { 'Content-Type': 'application/json', ...(auth as HeadersInit), ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -355,7 +368,8 @@ const Invites = () => {
     if (inviteToDelete && confirm(`Êtes-vous sûr de vouloir supprimer ${inviteToDelete.prenom} ${inviteToDelete.nom} ?`)) {
       try {
         const auth = await getAuthHeader();
-        const res = await fetch(`/api/invites/${id}`, { method: 'DELETE', credentials: 'include', headers: { ...(auth as HeadersInit) } });
+        const xsrf = getXsrfTokenFromCookie();
+        const res = await fetch(`/api/invites/${id}`, { method: 'DELETE', credentials: 'include', headers: { ...(auth as HeadersInit), ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) } });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw { response: { data: err } };

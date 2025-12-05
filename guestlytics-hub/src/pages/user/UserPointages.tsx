@@ -1,6 +1,5 @@
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,58 +14,58 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
+import { useToast } from "@/hooks/use-toast";
+import { getXsrfTokenFromCookie } from "@/lib/auth";
 
-const mockUsers = [
-  {
-    id: 1,
-    name: "Jean Martin",
-    role: "Serveur",
-    needsArrivalSignature: true,
-    hasArrivalSignature: false,
-  },
-  {
-    id: 2,
-    name: "Marie Dubois",
-    role: "Hôtesse",
-    needsArrivalSignature: true,
-    hasArrivalSignature: true,
-  },
-  {
-    id: 3,
-    name: "Paul Dupont",
-    role: "Maître d'hôtel",
-    needsArrivalSignature: true,
-    hasArrivalSignature: false,
-  },
-  {
-    id: 4,
-    name: "Sophie Laurent",
-    role: "Sécurité",
-    needsArrivalSignature: true,
-    hasArrivalSignature: true,
-  },
-  {
-    id: 5,
-    name: "Marie Dubois",
-    role: "Hôtesse",
-    needsArrivalSignature: true,
-    hasArrivalSignature: true,
-  },
-  {
-    id: 6,
-    name: "Paul Dupont",
-    role: "Maître d'hôtel",
-    needsArrivalSignature: true,
-    hasArrivalSignature: false,
-  },
-  {
-    id: 7,
-    name: "Sophie Laurent",
-    role: "Sécurité",
-    needsArrivalSignature: true,
-    hasArrivalSignature: true,
-  },
-];
+type StaffItem = { id: number; name: string; role: string; phone?: string; status?: string };
+type EventItem = { id: string; title: string; date: string; startTime?: string | null; endTime?: string | null; status: string };
+type AttendanceState = Record<number, { arrivedAt?: string | null; departedAt?: string | null }>;
+
+async function getAuthHeader(): Promise<HeadersInit> {
+  try {
+    const { getToken } = await import("@/lib/auth");
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
+  const auth = await getAuthHeader();
+  const method = String((init.method || 'GET')).toUpperCase();
+  const xsrf = getXsrfTokenFromCookie();
+  const headers: HeadersInit = { ...(init.headers || {}), ...(auth as HeadersInit) };
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && xsrf) {
+    (headers as any)['X-XSRF-TOKEN'] = xsrf;
+  }
+  let res = await fetch(path, { credentials: "include", ...init, headers });
+  if (res.status === 401) {
+    try {
+      const { refresh } = await import("@/lib/auth");
+      const ok = await refresh();
+      if (ok) {
+        const retryAuth = await getAuthHeader();
+        const retryHeaders: HeadersInit = { ...(init.headers || {}), ...(retryAuth as HeadersInit) };
+        if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && xsrf) {
+          (retryHeaders as any)['X-XSRF-TOKEN'] = xsrf;
+        }
+        res = await fetch(path, { credentials: "include", ...init, headers: retryHeaders });
+      }
+    } catch { /* noop */ }
+  }
+  return res;
+}
+
+// Staff list fetched from backend (same entreprise as logged-in user)
+// GET /api/utilisateur/staff (scoped by backend to entreprise)
+const mapStaff = (raw: any): StaffItem => ({
+  id: Number(raw?.id ?? 0),
+  name: String(raw?.name ?? ""),
+  role: String(raw?.role ?? ""),
+  phone: raw?.phone ?? "",
+  status: raw?.status ?? "",
+});
 
 // Pour la démo, on met des dates fixes; en réel, ça viendra du backend
 const mockEvents = [
@@ -89,11 +88,18 @@ const mockEvents = [
 type Mode = "arrival" | "departure";
 
 const UserPointages = () => {
+  const { toast } = useToast();
   const [mode, setMode] = useState<Mode>("arrival");
-  const [selectedEventId, setSelectedEventId] = useState<number>(mockEvents[0].id);
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [staff, setStaff] = useState<StaffItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [attendances, setAttendances] = useState<Record<string, AttendanceState>>({});
+  const [lockedEventId, setLockedEventId] = useState<string | null>(null);
+  const [lockUntil, setLockUntil] = useState<number | null>(null);
 
-  const selectedEvent = mockEvents.find((e) => e.id === selectedEventId)!;
+  const selectedEvent = events.find((e) => String(e.id) === String(selectedEventId));
 
   const parseTimeToMinutes = (time: string) => {
     const [h, m] = time.split(":").map(Number);
@@ -101,38 +107,158 @@ const UserPointages = () => {
   };
 
   const isNowWithinWindow = () => {
+    if (!selectedEvent) return false;
     const now = new Date();
-    const minutesNow = now.getHours() * 60 + now.getMinutes();
-    const start = parseTimeToMinutes(selectedEvent.startTime);
+    const [y, m, d] = (selectedEvent.date || "").split("-").map(Number);
+    const [sh, sm] = (selectedEvent.startTime || "00:00").split(":").map((n) => Number(n) || 0);
+    const [eh, em] = (selectedEvent.endTime || "23:59").split(":").map((n) => Number(n) || 0);
 
     // Gestion de la date de l'événement
-    const [y, m, d] = (selectedEvent.date || "").split("-").map(Number);
-    const eventDate = new Date(y, (m || 1) - 1, d || 1);
-
-    // Normaliser à minuit pour comparer uniquement les jours
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-
-    if (today < eventDay) {
-      // Jour pas encore arrivé -> pointage fermé
-      return false;
+    const startAt = new Date(y || now.getFullYear(), (m || 1) - 1, d || 1, sh, sm, 0, 0);
+    const endAt = new Date(y || now.getFullYear(), (m || 1) - 1, d || 1, eh, em, 0, 0);
+    // Événement qui traverse minuit (ex: 21:00 -> 02:00)
+    if (endAt <= startAt) {
+      endAt.setDate(endAt.getDate() + 1);
     }
 
-    if (today > eventDay) {
-      // Jour passé -> pointage toujours ouvert
-      return true;
-    }
+    // Ouvrir 2h avant le début, fermer 2h après la fin (gère le dépassement de jour)
+    const openStart = new Date(startAt.getTime() - 2 * 60 * 60 * 1000);
+    const openEnd = new Date(endAt.getTime() + 2 * 60 * 60 * 1000);
 
-    // Jour J: on ouvre à partir d'1h avant le début, puis sans limite
-    const threshold = Math.max(0, start - 60);
-    return minutesNow >= threshold;
+    return now >= openStart && now <= openEnd;
   };
 
   const pointageOuvert = isNowWithinWindow();
+  
+  // Locking: load persisted lock once
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('pointage-locked-event');
+      if (raw) {
+        const obj = JSON.parse(raw) as { eventId: string; until: number };
+        if (obj && obj.eventId && typeof obj.until === 'number') {
+          if (Date.now() < obj.until) {
+            setLockedEventId(String(obj.eventId));
+            setLockUntil(Number(obj.until));
+            setSelectedEventId(String(obj.eventId));
+          } else {
+            localStorage.removeItem('pointage-locked-event');
+          }
+        }
+      }
+    } catch { /* noop */ }
+  }, []);
 
-  const filteredUsers = mockUsers.filter((u) =>
-    mode === "arrival" ? u.needsArrivalSignature && !u.hasArrivalSignature : u.hasArrivalSignature,
-  );
+  // Auto-unlock when expiration passes
+  useEffect(() => {
+    if (!lockUntil) return;
+    const t = setInterval(() => {
+      if (lockUntil && Date.now() >= lockUntil) {
+        setLockedEventId(null);
+        setLockUntil(null);
+        try { localStorage.removeItem('pointage-locked-event'); } catch { /* noop */ }
+      }
+    }, 30000);
+    return () => clearInterval(t);
+  }, [lockUntil]);
+
+  // Enforce selection while locked
+  useEffect(() => {
+    if (!lockedEventId) return;
+    if (Date.now() >= (lockUntil || 0)) return;
+    if (String(selectedEventId) !== String(lockedEventId)) {
+      setSelectedEventId(String(lockedEventId));
+    }
+  }, [lockedEventId, lockUntil, selectedEventId]);
+
+  const eventSelectionLocked = !!lockedEventId && !!lockUntil && Date.now() < lockUntil;
+
+  const handleLockEvent = () => {
+    if (!selectedEvent) return;
+    const now = new Date();
+    const [y, m, d] = (selectedEvent.date || '').split('-').map(Number);
+    const [sh, sm] = (selectedEvent.startTime || '00:00').split(':').map((n) => Number(n) || 0);
+    const [eh, em] = (selectedEvent.endTime || '23:59').split(':').map((n) => Number(n) || 0);
+    const startAt = new Date(y || now.getFullYear(), (m || 1) - 1, d || 1, sh, sm, 0, 0);
+    const endAt = new Date(y || now.getFullYear(), (m || 1) - 1, d || 1, eh, em, 0, 0);
+    if (endAt <= startAt) endAt.setDate(endAt.getDate() + 1);
+    const unlockAt = new Date(endAt.getTime() + 2 * 60 * 60 * 1000).getTime();
+    setLockedEventId(String(selectedEvent.id));
+    setLockUntil(unlockAt);
+    try {
+      localStorage.setItem('pointage-locked-event', JSON.stringify({ eventId: String(selectedEvent.id), until: unlockAt }));
+    } catch { /* noop */ }
+  };
+  
+  // Charger les événements de l'utilisateur (en_attente, confirme, en_cours, termine)
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetchWithAuth(`/api/utilisateur/events`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload: unknown = await res.json();
+        const list = Array.isArray((payload as any)) ? (payload as any) : (((payload as any)?.data ?? []) as unknown[]);
+        const mapped: EventItem[] = list.map((raw: any) => ({
+          id: String(raw?.id ?? ""),
+          title: String(raw?.title ?? raw?.name ?? "Événement"),
+          date: String(raw?.date ?? ""),
+          startTime: raw?.startTime ?? null,
+          endTime: raw?.endTime ?? null,
+          status: String(raw?.status ?? ""),
+        }));
+        setEvents(mapped);
+        if (mapped.length > 0) setSelectedEventId(mapped[0].id);
+      } catch (e: unknown) {
+        const msg = (e as { message?: string })?.message || "Chargement des événements impossible";
+        toast({ title: "Erreur", description: msg, variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [toast]);
+  
+  useEffect(() => {
+    (async () => {
+      if (!selectedEventId) { setStaff([]); return; }
+      try {
+        setLoading(true);
+        const res = await fetchWithAuth(`/api/utilisateur/events/${encodeURIComponent(String(selectedEventId))}/assignments`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload: unknown = await res.json();
+        const list = Array.isArray((payload as any)) ? (payload as any) : (((payload as any)?.data ?? []) as unknown[]);
+        setStaff(list.map((x) => mapStaff(x)));
+      } catch (e: unknown) {
+        const msg = (e as { message?: string })?.message || "Chargement des employés impossible";
+        toast({ title: "Erreur", description: msg, variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [selectedEventId, toast]);
+
+  const refreshAttendances = useCallback(async () => {
+    if (!selectedEventId) return;
+    const res = await fetchWithAuth(`/api/utilisateur/events/${encodeURIComponent(String(selectedEventId))}/attendances`);
+    if (!res.ok) return;
+    const rows: Array<{ staffId: number; arrivedAt?: string | null; departedAt?: string | null }> = await res.json();
+    const map: AttendanceState = {};
+    for (const r of rows) {
+      map[Number(r.staffId)] = { arrivedAt: r.arrivedAt ?? null, departedAt: r.departedAt ?? null };
+    }
+    setAttendances((prev) => ({ ...prev, [String(selectedEventId)]: map }));
+  }, [selectedEventId]);
+
+  useEffect(() => { void refreshAttendances(); }, [refreshAttendances]);
+
+  const filteredUsers = staff.filter((u) => {
+    const ev = attendances[String(selectedEventId)] || {};
+    const rec = ev[Number(u.id)] || {};
+    const hasArrived = !!rec.arrivedAt;
+    const hasDeparted = !!rec.departedAt;
+    if (mode === 'arrival') return !hasArrived;
+    return hasArrived && !hasDeparted;
+  });
 
   const handleOpenSignature = (user: any) => {
     setSelectedUser(user);
@@ -140,6 +266,35 @@ const UserPointages = () => {
 
   const handleCloseSignature = () => {
     setSelectedUser(null);
+  };
+
+  const saveSignature = async (dataUrl: string) => {
+    if (!selectedUser) return;
+    try {
+      setLoading(true);
+      const staffId = Number(selectedUser.id);
+      const res = await fetchWithAuth(`/api/utilisateur/staff/${encodeURIComponent(String(selectedUser.id))}/signature`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: mode === 'arrival' ? 'arrival' : 'departure',
+          image: dataUrl,
+          eventId: selectedEventId ? Number(selectedEventId) : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err?.message as string | undefined) || `HTTP ${res.status}`);
+      }
+      toast({ title: 'Signature enregistrée', description: `Signature ${mode === 'arrival' ? "d'arrivée" : 'de départ'} sauvegardée.` });
+      await refreshAttendances();
+      handleCloseSignature();
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message || "Impossible d'enregistrer la signature";
+      toast({ title: 'Erreur', description: msg, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -185,17 +340,23 @@ const UserPointages = () => {
               aria-label="Sélectionner un événement"
               className="border rounded-md bg-blue-100 px-6 py-2 text-sm bg-background"
               value={selectedEventId}
-              onChange={(e) => setSelectedEventId(Number(e.target.value))}
+              onChange={(e) => setSelectedEventId(String(e.target.value))}
+              disabled={eventSelectionLocked}
             >
-              {mockEvents.map((event) => (
+              {events.map((event) => (
                 <option key={event.id} value={event.id}>
-                  {event.name}
+                  {event.title}
                 </option>
               ))}
             </select>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={handleLockEvent} disabled={!selectedEventId || eventSelectionLocked}>
+                Enregistrer
+              </Button>
+            </div>
             <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">
-                {selectedEvent.startTime} - {selectedEvent.endTime}
+                {selectedEvent?.startTime ?? "--:--"} - {selectedEvent?.endTime ?? "--:--"}
               </Badge>
               <Badge variant={pointageOuvert ? "default" : "destructive"}>
                 {pointageOuvert ? "Pointage ouvert" : "Pointage fermé"}
@@ -210,7 +371,7 @@ const UserPointages = () => {
           Le pointage pour cet événement est fermé. Veuillez revenir pendant la fenêtre
           {" "}
           <span className="font-semibold">
-            {selectedEvent.startTime} - {selectedEvent.endTime}
+            {selectedEvent?.startTime ?? "--:--"} - {selectedEvent?.endTime ?? "--:--"}
           </span>
           .
         </p>
@@ -231,7 +392,7 @@ const UserPointages = () => {
               {mode === "arrival" ? "arrivée" : "départ"} pour cet événement
               {" "}
               <span className="font-semibold">
-                ({selectedEvent.startTime} - {selectedEvent.endTime})
+                ({selectedEvent?.startTime ?? "--:--"} - {selectedEvent?.endTime ?? "--:--"})
               </span>
               .
             </p>
@@ -286,10 +447,7 @@ const UserPointages = () => {
               Signez ci-dessous pour confirmer le pointage.
             </p>
             <SignatureCanvas
-              onSignatureComplete={() => {
-                // Ici tu pourras brancher l'enregistrement de la signature plus tard
-                handleCloseSignature();
-              }}
+              onSignatureComplete={(dataUrl) => { void saveSignature(dataUrl); }}
               width={500}
               height={250}
             />

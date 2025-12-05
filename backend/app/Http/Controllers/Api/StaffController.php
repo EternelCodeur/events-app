@@ -7,8 +7,12 @@ use App\Http\Resources\StaffResource;
 use App\Models\Staff;
 use App\Models\Entreprise;
 use App\Models\Event;
+use App\Models\Attendance;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class StaffController extends Controller
 {
@@ -135,6 +139,12 @@ class StaffController extends Controller
             'phone' => $data['phone'] ?? null,
             'status' => 'inactive',
         ]);
+        // Create staff folder under entreprise slug
+        $entreprise = Entreprise::findOrFail($entrepriseId);
+        $slug = (string) $entreprise->slug;
+        $folderName = Str::slug((string) $staff->name, '-');
+        $folder = 'entreprises/' . $slug . '/staff/' . $folderName;
+        Storage::disk('local')->makeDirectory($folder);
 
         return new StaffResource($staff);
     }
@@ -173,8 +183,52 @@ class StaffController extends Controller
             }
         }
 
+        $oldName = (string) $staff->name;
+        $oldSlugName = Str::slug($oldName, '-');
+
         $staff->fill($data);
         $staff->save();
+
+        // If name changed, rename/move the local folder accordingly
+        if ($oldName !== (string) $staff->name) {
+            try {
+                $entreprise = Entreprise::findOrFail($staff->entreprise_id);
+                $companySlug = (string) $entreprise->slug;
+                $base = 'entreprises/' . $companySlug . '/staff/';
+                $newSlugName = Str::slug((string) $staff->name, '-');
+                $oldPath = $base . $oldSlugName;
+                $newPath = $base . $newSlugName;
+
+                // Legacy path by id (from older versions)
+                $legacyIdPath = $base . $staff->id;
+
+                $disk = Storage::disk('local');
+                if ($disk->exists($oldPath)) {
+                    if (!$disk->exists($newPath)) {
+                        $disk->move($oldPath, $newPath);
+                    } else {
+                        // Destination exists unexpectedly; back up old folder to avoid data loss
+                        $backup = $oldPath . '-backup-' . date('YmdHis');
+                        $disk->move($oldPath, $backup);
+                    }
+                } elseif ($disk->exists($legacyIdPath)) {
+                    // Move from legacy id path to new slug
+                    if (!$disk->exists($newPath)) {
+                        $disk->move($legacyIdPath, $newPath);
+                    } else {
+                        $backup = $legacyIdPath . '-backup-' . date('YmdHis');
+                        $disk->move($legacyIdPath, $backup);
+                    }
+                } else {
+                    // Ensure new folder exists at least
+                    if (!$disk->exists($newPath)) {
+                        $disk->makeDirectory($newPath);
+                    }
+                }
+            } catch (\Throwable $_) {
+                // ignore fs errors to not block update
+            }
+        }
 
         return new StaffResource($staff);
     }
@@ -186,7 +240,180 @@ class StaffController extends Controller
             abort(403, 'Forbidden');
         }
 
+        // Delete staff folder(s)
+        try {
+            $entreprise = Entreprise::findOrFail($staff->entreprise_id);
+            $slug = (string) $entreprise->slug;
+            $folderSlugName = Str::slug((string) $staff->name, '-');
+            $basePathSlug = 'entreprises/' . $slug . '/staff/' . $folderSlugName;
+            $basePathId = 'entreprises/' . $slug . '/staff/' . $staff->id;
+            Storage::disk('local')->deleteDirectory($basePathSlug);
+            Storage::disk('local')->deleteDirectory($basePathId);
+        } catch (\Throwable $_) {
+            // ignore folder deletion errors
+        }
+
         $staff->delete();
         return response()->noContent();
+    }
+
+    public function storeSignature(Request $request, Staff $staff)
+    {
+        $user = $request->user();
+        if (($user->role ?? 'admin') !== 'superadmin' && (int)$staff->entreprise_id !== (int)$user->entreprise_id) {
+            abort(403, 'Forbidden');
+        }
+
+        $data = $request->validate([
+            'type' => ['required', 'in:arrival,departure'],
+            'image' => ['required', 'string'], // data URL: data:image/png;base64,...
+            'eventId' => ['required', 'integer'],
+        ]);
+
+        $dataUrl = (string) $data['image'];
+        if (!preg_match('/^data:image\/(png|jpeg);base64,/', $dataUrl, $m)) {
+            abort(422, 'Format de signature invalide');
+        }
+        $ext = ($m[1] === 'jpeg') ? 'jpg' : $m[1];
+        $base64 = substr($dataUrl, strpos($dataUrl, ',') + 1);
+        $binary = base64_decode($base64);
+        if ($binary === false) {
+            abort(422, 'Image invalide');
+        }
+
+        $entreprise = Entreprise::findOrFail($staff->entreprise_id);
+        $slug = (string) $entreprise->slug;
+        $folderName = Str::slug((string) $staff->name, '-');
+        $base = 'entreprises/' . $slug . '/staff/' . $folderName . '/signatures';
+        Storage::disk('local')->makeDirectory($base);
+        $prefix = $data['type'] === 'arrival' ? 'arrivee' : 'depart';
+        $filename = $prefix . '_' . date('Ymd_His') . '.' . $ext;
+        Storage::disk('local')->put($base . '/' . $filename, $binary);
+
+        // Persist attendance per event
+        $event = Event::findOrFail((int) $data['eventId']);
+        if (($user->role ?? 'admin') !== 'superadmin') {
+            if ((int)$event->entreprise_id !== (int)$user->entreprise_id || (int)$staff->entreprise_id !== (int)$user->entreprise_id) {
+                abort(403, 'Forbidden');
+            }
+        }
+
+        $attendance = Attendance::firstOrNew([
+            'event_id' => $event->id,
+            'staff_id' => $staff->id,
+        ]);
+        $attendance->entreprise_id = $event->entreprise_id;
+        if ($data['type'] === 'arrival') {
+            if (empty($attendance->arrived_at)) {
+                $attendance->arrived_at = now();
+            }
+            $attendance->arrival_signature_path = $base . '/' . $filename;
+        } else { // departure
+            if (empty($attendance->departed_at)) {
+                $attendance->departed_at = now();
+            }
+            $attendance->departure_signature_path = $base . '/' . $filename;
+        }
+        $attendance->save();
+
+        return response()->json([
+            'path' => $base . '/' . $filename,
+            'attendance' => [
+                'staffId' => $staff->id,
+                'eventId' => $event->id,
+                'arrivedAt' => $attendance->arrived_at,
+                'departedAt' => $attendance->departed_at,
+            ],
+        ], 201);
+    }
+
+    public function monthlyAttendances(Request $request, Staff $staff)
+    {
+        $user = $request->user();
+        if (($user->role ?? 'admin') !== 'superadmin' && (int)$staff->entreprise_id !== (int)$user->entreprise_id) {
+            abort(403, 'Forbidden');
+        }
+
+        $month = (string) ($request->query('month') ?: date('Y-m'));
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $month = date('Y-m');
+        }
+        $start = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        $end = (clone $start)->endOfMonth();
+        $startDt = (clone $start)->startOfDay();
+        $endDt = (clone $end)->endOfDay();
+
+        $rows = Attendance::query()
+            ->join('events as ev', 'ev.id', '=', 'attendances.event_id')
+            ->where('attendances.staff_id', $staff->id)
+            ->where(function ($q) use ($start, $end, $startDt, $endDt) {
+                $q->whereBetween('ev.date', [$start->toDateString(), $end->toDateString()])
+                  ->orWhereBetween('attendances.arrived_at', [$startDt->toDateTimeString(), $endDt->toDateTimeString()])
+                  ->orWhereBetween('attendances.departed_at', [$startDt->toDateTimeString(), $endDt->toDateTimeString()]);
+            })
+            ->when((($user->role ?? 'admin') !== 'superadmin'), function ($q) use ($user) {
+                $q->where('ev.entreprise_id', $user->entreprise_id);
+            })
+            ->orderBy('ev.date', 'asc')
+            ->orderBy('ev.start_time', 'asc')
+            ->get([
+                'attendances.event_id',
+                'attendances.arrived_at',
+                'attendances.departed_at',
+                'attendances.arrival_signature_path',
+                'attendances.departure_signature_path',
+                'ev.title',
+                'ev.date',
+                'ev.start_time',
+                'ev.end_time',
+            ])
+            ->map(function ($r) use ($staff) {
+                $arrivalFilename = $r->arrival_signature_path ? basename((string) $r->arrival_signature_path) : null;
+                $departureFilename = $r->departure_signature_path ? basename((string) $r->departure_signature_path) : null;
+                return [
+                    'eventId' => (int) $r->event_id,
+                    'eventTitle' => (string) ($r->title ?? ''),
+                    'date' => (string) $r->date,
+                    'startTime' => $r->start_time ? substr((string)$r->start_time, 0, 5) : null,
+                    'endTime' => $r->end_time ? substr((string)$r->end_time, 0, 5) : null,
+                    'arrivedAt' => $r->arrived_at,
+                    'departedAt' => $r->departed_at,
+                    'arrivalSignatureUrl' => $arrivalFilename ? url('/api/utilisateur/staff/' . $staff->id . '/signatures/arrival/' . $arrivalFilename) : null,
+                    'departureSignatureUrl' => $departureFilename ? url('/api/utilisateur/staff/' . $staff->id . '/signatures/departure/' . $departureFilename) : null,
+                ];
+            })
+            ->values();
+
+        return response()->json($rows);
+    }
+
+    public function signatureFile(Request $request, Staff $staff, string $type, string $filename)
+    {
+        $user = $request->user();
+        if (($user->role ?? 'admin') !== 'superadmin' && (int)$staff->entreprise_id !== (int)$user->entreprise_id) {
+            abort(403, 'Forbidden');
+        }
+        if (!in_array($type, ['arrival', 'departure'], true)) {
+            abort(422, 'Type invalide');
+        }
+
+        $entreprise = Entreprise::findOrFail($staff->entreprise_id);
+        $slug = (string) $entreprise->slug;
+        $folderSlug = 'entreprises/' . $slug . '/staff/' . Str::slug((string) $staff->name, '-') . '/signatures/' . $filename;
+        $folderId = 'entreprises/' . $slug . '/staff/' . $staff->id . '/signatures/' . $filename;
+        $disk = Storage::disk('local');
+        $path = null;
+        if ($disk->exists($folderSlug)) {
+            $path = $folderSlug;
+        } elseif ($disk->exists($folderId)) {
+            $path = $folderId;
+        }
+        if (!$path) {
+            abort(404);
+        }
+        $binary = $disk->get($path);
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $mime = $ext === 'jpg' || $ext === 'jpeg' ? 'image/jpeg' : ($ext === 'png' ? 'image/png' : 'application/octet-stream');
+        return response($binary, 200)->header('Content-Type', $mime);
     }
 }

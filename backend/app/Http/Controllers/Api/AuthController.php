@@ -24,6 +24,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Identifiants invalides'], 401);
         }
 
+
         // Vérification d'entreprise active pour les rôles non-superadmin
         if (in_array($user->role ?? 'admin', ['admin', 'hotesse', 'utilisateur'], true)) {
             if (!$user->entreprise_id) {
@@ -48,18 +49,21 @@ class AuthController extends Controller
 
     public function logout()
     {
-        // Stateless JWT: rien à invalider côté serveur par défaut
-        return response()->json(['message' => 'Déconnecté']);
+        // Effacer les cookies
+        $resp = response()->json(['message' => 'Déconnecté']);
+        $this->clearAuthCookies($resp);
+        return $resp;
     }
 
     public function refresh(Request $request)
     {
-        // Support refresh sans middleware jwt: lire le token Bearer et accepter les tokens expirés
+        // Support refresh sans middleware jwt: lire le token Bearer OU le cookie access_token et accepter les tokens expirés
         $auth = (string) $request->header('Authorization', '');
-        if (!str_starts_with($auth, 'Bearer ')) {
-            return response()->json(['message' => 'Unauthenticated'], 401);
+        if (str_starts_with($auth, 'Bearer ')) {
+            $token = substr($auth, 7);
+        } else {
+            $token = (string) $request->cookie('access_token', '');
         }
-        $token = substr($auth, 7);
         if (!$token) {
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
@@ -88,12 +92,24 @@ class AuthController extends Controller
     protected function respondWithToken(string $token, User $user)
     {
         $ttlSeconds = (int) (config('jwt.ttl', 60) * 60);
-        return response()->json([
+        $resp = response()->json([
             'access_token' => $token,
             'token_type' => 'bearer',
             'expires_in' => $ttlSeconds,
             'user' => $this->transformUser($user),
         ]);
+
+        // Cookies sécurisés
+        $secure = app()->environment('production');
+        $sameSite = 'Strict';
+        $minutes = (int) ceil($ttlSeconds / 60);
+        // Cookie HttpOnly pour le token
+        $resp->cookie('access_token', $token, $minutes, '/', null, $secure, true, false, $sameSite);
+        // Cookie lisible par le client pour CSRF (double submit)
+        $xsrf = bin2hex(random_bytes(32));
+        $resp->cookie('XSRF-TOKEN', $xsrf, $minutes, '/', null, $secure, false, false, $sameSite);
+
+        return $resp;
     }
 
     /**
@@ -181,5 +197,13 @@ class AuthController extends Controller
             $data .= str_repeat('=', 4 - $remainder);
         }
         return base64_decode(strtr($data, '-_', '+/')) ?: '';
+    }
+
+    private function clearAuthCookies(\Illuminate\Http\JsonResponse $resp): void
+    {
+        $secure = app()->environment('production');
+        $sameSite = 'Strict';
+        $resp->cookie('access_token', '', -1, '/', null, $secure, true, false, $sameSite);
+        $resp->cookie('XSRF-TOKEN', '', -1, '/', null, $secure, false, false, $sameSite);
     }
 }

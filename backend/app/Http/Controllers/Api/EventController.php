@@ -29,6 +29,21 @@ class EventController extends Controller
         return EventResource::collection($events);
     }
 
+    public function userIndex(Request $request)
+    {
+        $user = $request->user();
+        $query = Event::query()->whereIn('status', ['en_attente', 'confirme', 'en_cours', 'termine'])->orderByDesc('id');
+        if (($user->role ?? 'admin') !== 'superadmin') {
+            $query->where('entreprise_id', $user->entreprise_id);
+        } else {
+            if ($request->filled('entrepriseId')) {
+                $query->where('entreprise_id', (int) $request->integer('entrepriseId'));
+            }
+        }
+        $events = $query->get();
+        return EventResource::collection($events);
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();

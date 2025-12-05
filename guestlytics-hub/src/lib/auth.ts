@@ -18,41 +18,21 @@ const TOKEN_KEY = "guestlytics_auth_token";
 const TOKEN_SESSION_KEY = "guestlytics_auth_token_session";
 
 export function getToken(): string | null {
-  if (currentToken) return currentToken;
-  // Prefer persistent token if available to avoid stale session token overriding it
-  try {
-    const p = localStorage.getItem(TOKEN_KEY);
-    if (p) return (currentToken = p);
-  } catch { /* noop */ }
-  try {
-    const s = sessionStorage.getItem(TOKEN_SESSION_KEY);
-    if (s) return (currentToken = s);
-  } catch { /* noop */ }
+  // JWT now lives in HttpOnly cookie; do not expose token to JS
   return null;
 }
 
-function persistAuth(user: AuthUser, token: string, remember: boolean) {
+function persistAuth(user: AuthUser, _token: string, remember: boolean) {
   currentUser = user;
-  currentToken = token;
   if (remember) {
-    // Persist in localStorage and clear session copies to avoid dual tokens
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-      localStorage.setItem(TOKEN_KEY, token);
-    } catch { /* noop */ }
-    try {
       sessionStorage.removeItem(SESSION_KEY);
-      sessionStorage.removeItem(TOKEN_SESSION_KEY);
     } catch { /* noop */ }
   } else {
-    // Session-only: store in sessionStorage and clear any persistent copies
     try {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
-      sessionStorage.setItem(TOKEN_SESSION_KEY, token);
-    } catch { /* noop */ }
-    try {
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(TOKEN_KEY);
     } catch { /* noop */ }
   }
 }
@@ -65,6 +45,7 @@ export async function login(
   const res = await fetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ email, password }),
   });
   const data = (await res.json()) as unknown as {
@@ -88,15 +69,9 @@ export async function login(
 }
 
 export async function logout(): Promise<void> {
-  const token = getToken();
-  if (token) {
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch { /* noop */ }
-  }
+  try {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+  } catch { /* noop */ }
   currentUser = null;
   currentToken = null;
   try { localStorage.removeItem(STORAGE_KEY); } catch (_e) { void 0; }
@@ -119,10 +94,8 @@ export async function getMe(): Promise<AuthUser | null> {
   } catch { currentUser = null; }
   if (currentUser) return currentUser;
   // fetch from backend if token exists
-  const token = getToken();
-  if (!token) return null;
   try {
-    const res = await fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch("/api/auth/me", { credentials: "include" });
     if (!res.ok) return null;
     const u = (await res.json()) as Record<string, unknown>;
     const user: AuthUser = {
@@ -142,10 +115,8 @@ export async function getMe(): Promise<AuthUser | null> {
 }
 
 export async function refresh(): Promise<boolean> {
-  const token = getToken();
-  if (!token) return false;
   try {
-    const res = await fetch("/api/auth/refresh", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch("/api/auth/refresh", { method: "POST", credentials: "include" });
     if (!res.ok) {
       currentUser = null;
       currentToken = null;
@@ -155,15 +126,15 @@ export async function refresh(): Promise<boolean> {
       try { sessionStorage.removeItem(TOKEN_SESSION_KEY); } catch { /* empty */ }
       return false;
     }
-    const data = (await res.json()) as Record<string, unknown>;
-    const newToken = data?.access_token as string | undefined;
-    if (!newToken) return false;
-    // keep same user in memory/storage
-    const user = await getMe();
-    if (user) persistAuth(user, newToken, !!localStorage.getItem(TOKEN_KEY));
-    else currentToken = newToken;
     return true;
   } catch {
     return false;
   }
+}
+
+export function getXsrfTokenFromCookie(): string | null {
+  try {
+    const m = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  } catch { return null; }
 }

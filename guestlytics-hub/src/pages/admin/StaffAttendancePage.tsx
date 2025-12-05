@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Eye } from "lucide-react";
+import { getXsrfTokenFromCookie } from "@/lib/auth";
 
 // Types simples pour les données de présence
 interface AttendanceDay {
@@ -10,10 +12,61 @@ interface AttendanceDay {
   in?: string | null;
   out?: string | null;
   mins: number; // minutes travaillées ce jour
+  arrivalSignatureUrl?: string | null;
+  departureSignatureUrl?: string | null;
 }
 
 interface AttendanceSummary {
   perDay: AttendanceDay[];
+}
+
+// Backend row type
+interface BackendAttendanceRow {
+  eventId: number;
+  eventTitle: string;
+  date: string; // YYYY-MM-DD
+  startTime: string | null;
+  endTime: string | null;
+  arrivedAt: string | null; // ISO
+  departedAt: string | null; // ISO
+  arrivalSignatureUrl?: string | null;
+  departureSignatureUrl?: string | null;
+}
+
+async function getAuthHeader(): Promise<HeadersInit> {
+  try {
+    const { getToken } = await import("@/lib/auth");
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
+  const auth = await getAuthHeader();
+  const method = String((init.method || 'GET')).toUpperCase();
+  const xsrf = getXsrfTokenFromCookie();
+  const headers: HeadersInit = { ...(init.headers || {}), ...(auth as HeadersInit) };
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && xsrf) {
+    (headers as any)['X-XSRF-TOKEN'] = xsrf;
+  }
+  let res = await fetch(path, { credentials: "include", ...init, headers });
+  if (res.status === 401) {
+    try {
+      const { refresh } = await import("@/lib/auth");
+      const ok = await refresh();
+      if (ok) {
+        const retryAuth = await getAuthHeader();
+        const retryHeaders: HeadersInit = { ...(init.headers || {}), ...(retryAuth as HeadersInit) };
+        if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && xsrf) {
+          (retryHeaders as any)['X-XSRF-TOKEN'] = xsrf;
+        }
+        res = await fetch(path, { credentials: "include", ...init, headers: retryHeaders });
+      }
+    } catch { /* noop */ }
+  }
+  return res;
 }
 
 // Petite fonction utilitaire pour formatter HH:mm
@@ -53,6 +106,9 @@ const StaffAttendancePage: React.FC = () => {
   const empName = location.state?.name;
   const empPosition = location.state?.position;
 
+  const [staffName, setStaffName] = useState<string | null>(null);
+  const [staffRole, setStaffRole] = useState<string | null>(null);
+
   const now = new Date();
   const defaultPeriod = params.get("period") ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [period, setPeriod] = useState(defaultPeriod);
@@ -60,10 +116,80 @@ const StaffAttendancePage: React.FC = () => {
   const [year, month] = period.split("-").map(Number);
   const monthIndex = (month || now.getMonth() + 1) - 1; // 0-11
 
-  const summary = useMemo(
-    () => generateMockSummary(year || new Date().getFullYear(), monthIndex),
-    [year, monthIndex],
-  );
+  const [rows, setRows] = useState<BackendAttendanceRow[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!id) return;
+        const res = await fetchWithAuth(`/api/staff/${encodeURIComponent(String(id))}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const name = String((data?.data?.name ?? data?.name ?? '') as string);
+        const role = String((data?.data?.role ?? data?.role ?? '') as string);
+        if (name) setStaffName(name);
+        if (role) setStaffRole(role);
+      } catch { /* noop */ }
+    })();
+  }, [id]);
+
+  const loadRows = useCallback(async () => {
+    if (!id) return;
+    const url = `/api/utilisateur/staff/${encodeURIComponent(String(id))}/attendances?month=${encodeURIComponent(String(period))}`;
+    const res = await fetchWithAuth(url);
+    if (!res.ok) { setRows([]); return; }
+    const data = await res.json();
+    setRows(Array.isArray(data) ? data : []);
+  }, [id, period]);
+
+  useEffect(() => { void loadRows(); }, [loadRows]);
+
+  const summary = useMemo(() => {
+    const daysInMonth = new Date(year || new Date().getFullYear(), monthIndex + 1, 0).getDate();
+    const perDay: AttendanceDay[] = [];
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const timeFromIso = (iso: string) => {
+      // expects YYYY-MM-DDTHH:MM:SS
+      const t = iso.split("T")[1] || "";
+      return t.slice(0, 5) || null;
+    };
+    const effectiveDate = (r: BackendAttendanceRow) => (r.arrivedAt ? r.arrivedAt.slice(0, 10) : r.date);
+    const minutesBetween = (dateStr: string, start?: string | null, end?: string | null) => {
+      if (!start || !end) return 0;
+      const [y, m, d] = dateStr.split("-").map(Number);
+      const [sh, sm] = start.split(":").map(Number);
+      const [eh, em] = end.split(":").map(Number);
+      const s = new Date(y, (m || 1) - 1, d || 1, sh || 0, sm || 0, 0, 0).getTime();
+      let e = new Date(y, (m || 1) - 1, d || 1, eh || 0, em || 0, 0, 0).getTime();
+      if (e < s) e += 24 * 60 * 60 * 1000; // cross-midnight
+      return Math.max(0, Math.round((e - s) / 60000));
+    };
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year || new Date().getFullYear()}-${pad2(monthIndex + 1)}-${pad2(d)}`;
+      const dayRows = rows.filter(r => effectiveDate(r) === dateStr);
+      if (dayRows.length === 0) {
+        perDay.push({ date: dateStr, in: null, out: null, mins: 0 });
+        continue;
+      }
+      // earliest arrival and latest departure among rows
+      let inTime: string | null = null;
+      let outTime: string | null = null;
+      let arrSig: string | null = null;
+      let depSig: string | null = null;
+      for (const r of dayRows) {
+        if (r.arrivedAt) {
+          const t = timeFromIso(r.arrivedAt);
+          if (t && (!inTime || t < inTime)) { inTime = t; arrSig = r.arrivalSignatureUrl || arrSig; }
+        }
+        if (r.departedAt) {
+          const t = timeFromIso(r.departedAt);
+          if (t && (!outTime || t > outTime)) { outTime = t; depSig = r.departureSignatureUrl || depSig; }
+        }
+      }
+      perDay.push({ date: dateStr, in: inTime, out: outTime, mins: minutesBetween(dateStr, inTime, outTime), arrivalSignatureUrl: arrSig, departureSignatureUrl: depSig });
+    }
+    return { perDay } as AttendanceSummary;
+  }, [rows, year, monthIndex]);
 
   const totalMins = useMemo(() => summary.perDay.reduce((acc, d) => acc + d.mins, 0), [summary]);
 
@@ -88,10 +214,10 @@ const StaffAttendancePage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold">Fiche de présence mensuelle</h1>
           <p className="text-muted-foreground text-sm">
-            {empName ? (
+            {(empName || staffName) ? (
               <>
-                {empName}
-                {empPosition ? ` • ${empPosition}` : ""} • {monthLabel}
+                {empName || staffName}
+                {(empPosition || staffRole) ? ` • ${empPosition || staffRole}` : ""} • {monthLabel}
               </>
             ) : (
               <>
@@ -122,10 +248,10 @@ const StaffAttendancePage: React.FC = () => {
       <div className="hidden print:block mb-2 text-center">
         <div className="text-lg font-bold uppercase tracking-wide">Fiche de présence</div>
         <div className="text-sm mt-1">
-          {empName ? (
+          {(empName || staffName) ? (
             <>
-              {empName}
-              {empPosition ? ` • ${empPosition}` : ""} • {monthLabel}
+              {empName || staffName}
+              {(empPosition || staffRole) ? ` • ${empPosition || staffRole}` : ""} • {monthLabel}
             </>
           ) : (
             <>
@@ -145,6 +271,8 @@ const StaffAttendancePage: React.FC = () => {
                   <TableHead className="text-center">Date</TableHead>
                   <TableHead className="text-center">Heure d'arrivée</TableHead>
                   <TableHead className="text-center">Heure de départ</TableHead>
+                  <TableHead className="text-center">Signature arrivée</TableHead>
+                  <TableHead className="text-center">Signature départ</TableHead>
                   <TableHead className="text-center">Total</TableHead>
                 </TableRow>
               </TableHeader>
@@ -160,6 +288,44 @@ const StaffAttendancePage: React.FC = () => {
                       <TableCell className="text-center">{dateLabel}</TableCell>
                       <TableCell className="text-center">{e.in ?? "-"}</TableCell>
                       <TableCell className="text-center">{e.out ?? "-"}</TableCell>
+                      <TableCell className="text-center">
+                        {e.arrivalSignatureUrl ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                const res = await fetchWithAuth(e.arrivalSignatureUrl);
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, "_blank");
+                              } catch { /* noop */ }
+                            }}
+                            title="Voir la signature d'arrivée"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        ) : "-"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {e.departureSignatureUrl ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                const res = await fetchWithAuth(e.departureSignatureUrl);
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, "_blank");
+                              } catch { /* noop */ }
+                            }}
+                            title="Voir la signature de départ"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        ) : "-"}
+                      </TableCell>
                       <TableCell className="text-center font-medium">{formatHours(e.mins)}</TableCell>
                     </TableRow>
                   );

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { getXsrfTokenFromCookie } from "@/lib/auth";
 
 const GuestsAgent = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -33,14 +34,24 @@ const GuestsAgent = () => {
 
   async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
     const auth = await getAuthHeader();
-    let res = await fetch(path, { credentials: "include", ...init, headers: { ...(init.headers || {}), ...(auth as HeadersInit) } });
+    const method = String((init.method || 'GET')).toUpperCase();
+    const xsrf = getXsrfTokenFromCookie();
+    const headers: HeadersInit = { ...(init.headers || {}), ...(auth as HeadersInit) };
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && xsrf) {
+      (headers as any)['X-XSRF-TOKEN'] = xsrf;
+    }
+    let res = await fetch(path, { credentials: "include", ...init, headers });
     if (res.status === 401) {
       try {
         const { refresh } = await import("@/lib/auth");
         const ok = await refresh();
         if (ok) {
           const retryAuth = await getAuthHeader();
-          res = await fetch(path, { credentials: "include", ...init, headers: { ...(init.headers || {}), ...(retryAuth as HeadersInit) } });
+          const retryHeaders: HeadersInit = { ...(init.headers || {}), ...(retryAuth as HeadersInit) };
+          if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && xsrf) {
+            (retryHeaders as any)['X-XSRF-TOKEN'] = xsrf;
+          }
+          res = await fetch(path, { credentials: "include", ...init, headers: retryHeaders });
         }
       } catch { /* noop */ }
     }

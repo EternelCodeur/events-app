@@ -20,12 +20,14 @@ class JwtMiddleware
     public function handle(Request $request, Closure $next): Response
     {
         $auth = $request->header('Authorization', '');
-        if (!str_starts_with($auth, 'Bearer ')) {
-            abort(401, 'Token manquant');
+        $token = '';
+        if (str_starts_with($auth, 'Bearer ')) {
+            $token = substr($auth, 7);
+        } else {
+            $token = (string) $request->cookie('access_token', '');
         }
-        $token = substr($auth, 7);
         if (!$token) {
-            abort(401, 'Token invalide');
+            abort(401, 'Token manquant');
         }
         try {
             $secret = $this->getSecret();
@@ -40,6 +42,19 @@ class JwtMiddleware
             }
             Auth::setUser($user);
             $request->setUserResolver(fn () => $user);
+
+            // Double-submit CSRF (facultatif): si cookie XSRF-TOKEN présent, exiger un header correspondant sur méthodes non sûres
+            $method = strtoupper($request->getMethod());
+            if (!in_array($method, ['GET', 'HEAD', 'OPTIONS'], true)) {
+                $cookieXsrf = (string) $request->cookie('XSRF-TOKEN', '');
+                $headerXsrf = (string) $request->header('X-XSRF-TOKEN', '');
+                // N'exige l'égalité que si les deux sont présents (pour ne pas casser les clients existants)
+                if ($cookieXsrf !== '' && $headerXsrf !== '') {
+                    if (!hash_equals($cookieXsrf, $headerXsrf)) {
+                        abort(419, 'CSRF token mismatch');
+                    }
+                }
+            }
 
             // Vérifier entreprise active pour les rôles non-superadmin
             $role = (string) ($user->role ?? 'admin');

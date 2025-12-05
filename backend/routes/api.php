@@ -89,6 +89,18 @@ Route::middleware(['jwt', 'role:hotesse,admin,superadmin'])->group(function () {
     Route::post('agent/invites/{invite}/checkin', [InviteController::class, 'agentCheckin']);
 });
 
+// Utilisateur (pointages) endpoints
+Route::middleware(['jwt', 'role:utilisateur,admin,superadmin'])->group(function () {
+    Route::get('utilisateur/staff', [StaffController::class, 'index']);
+    Route::get('utilisateur/events', [EventController::class, 'userIndex']);
+    Route::get('utilisateur/events/{event}/assignments', [EventAssignmentController::class, 'index']);
+    Route::get('utilisateur/events/{event}/attendances', [EventAssignmentController::class, 'attendances']);
+    Route::post('utilisateur/staff/{staff}/signature', [StaffController::class, 'storeSignature']);
+    Route::get('utilisateur/staff/{staff}/attendances', [StaffController::class, 'monthlyAttendances']);
+    Route::get('utilisateur/staff/{staff}/signatures/{type}/{filename}', [StaffController::class, 'signatureFile'])
+        ->where('type', 'arrival|departure');
+});
+
 // Users management (admins of entreprise and superadmins)
 Route::middleware(['jwt', 'role:admin,superadmin'])->group(function () {
     Route::apiResource('users', UsersController::class);

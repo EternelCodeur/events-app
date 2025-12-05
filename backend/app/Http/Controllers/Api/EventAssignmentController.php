@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\StaffResource;
 use App\Models\Event;
 use App\Models\Staff;
+use App\Models\Attendance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -234,5 +235,38 @@ class EventAssignmentController extends Controller
         ]);
 
         return response()->noContent();
+    }
+
+    public function attendances(Request $request, Event $event)
+    {
+        $user = $request->user();
+        if (($user->role ?? 'admin') !== 'superadmin' && (int)$event->entreprise_id !== (int)$user->entreprise_id) {
+            abort(403, 'Forbidden');
+        }
+
+        // Only include staff assigned to this event
+        $assignedStaffIds = DB::table('event_staff_assignments')
+            ->where('event_id', $event->id)
+            ->pluck('staff_id')
+            ->toArray();
+
+        if (empty($assignedStaffIds)) {
+            return response()->json([]);
+        }
+
+        $records = Attendance::query()
+            ->where('event_id', $event->id)
+            ->whereIn('staff_id', $assignedStaffIds)
+            ->get(['staff_id', 'arrived_at', 'departed_at'])
+            ->map(function ($row) {
+                return [
+                    'staffId' => (int) $row->staff_id,
+                    'arrivedAt' => $row->arrived_at,
+                    'departedAt' => $row->departed_at,
+                ];
+            })
+            ->values();
+
+        return response()->json($records);
     }
 }
