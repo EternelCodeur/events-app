@@ -55,6 +55,31 @@ class AuthController extends Controller
         return $resp;
     }
 
+    public function changePassword(Request $request)
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $data = $request->validate([
+            'currentPassword' => ['required', 'string'],
+            'newPassword' => ['required', 'string', 'min:6'],
+            'confirmPassword' => ['required', 'string', 'same:newPassword'],
+        ]);
+
+        if (!Hash::check($data['currentPassword'], $user->password)) {
+            return response()->json([
+                'message' => 'Mot de passe actuel incorrect',
+            ], 422);
+        }
+
+        $user->password = Hash::make($data['newPassword']);
+        $user->save();
+
+        return response()->json([
+            'message' => 'Mot de passe mis à jour avec succès',
+        ]);
+    }
+
     public function refresh(Request $request)
     {
         // Support refresh sans middleware jwt: lire le token Bearer OU le cookie access_token et accepter les tokens expirés

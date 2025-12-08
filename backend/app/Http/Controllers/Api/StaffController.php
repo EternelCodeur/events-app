@@ -378,8 +378,13 @@ class StaffController extends Controller
                     'endTime' => $r->end_time ? substr((string)$r->end_time, 0, 5) : null,
                     'arrivedAt' => $r->arrived_at,
                     'departedAt' => $r->departed_at,
-                    'arrivalSignatureUrl' => $arrivalFilename ? url('/api/utilisateur/staff/' . $staff->id . '/signatures/arrival/' . $arrivalFilename) : null,
-                    'departureSignatureUrl' => $departureFilename ? url('/api/utilisateur/staff/' . $staff->id . '/signatures/departure/' . $departureFilename) : null,
+                    // Renvoie des chemins relatifs pour que le front passe par le proxy Vite (/api -> backend)
+                    'arrivalSignatureUrl' => $arrivalFilename
+                        ? '/api/utilisateur/staff/' . $staff->id . '/signatures/arrival/' . $arrivalFilename
+                        : null,
+                    'departureSignatureUrl' => $departureFilename
+                        ? '/api/utilisateur/staff/' . $staff->id . '/signatures/departure/' . $departureFilename
+                        : null,
                 ];
             })
             ->values();

@@ -15,7 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getXsrfTokenFromCookie } from "@/lib/auth";
 
 const GuestsAgent = () => {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(""); // terme appliqué à la recherche
+  const [searchInput, setSearchInput] = useState(""); // contenu du champ texte
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
   const { toast } = useToast();
 
@@ -147,18 +148,15 @@ const GuestsAgent = () => {
           : "tous tous_les_cotes les deux tous les cotes";
       haystacks.push(strip(coteLabel));
 
-      return haystacks.some((h) => h.includes(q));
+      // Correspondance exacte après normalisation (pas de "Jean" qui matche "John")
+      return haystacks.some((h) => h === q);
     });
   }, [guestsForEvent, searchTerm]);
 
-  useEffect(() => {
-    if (searchTerm.trim() && filteredGuests.length === 1) {
-      setSelectedGuest(filteredGuests[0]);
-    }
-  }, [searchTerm, filteredGuests]);
-
-  const handleSearch = (term: string) => {
+  const applySearch = () => {
+    const term = searchInput.trim();
     setSearchTerm(term);
+    setSelectedGuest(null);
   };
 
   const formatDateTimeLocal = (iso?: string | null) => {
@@ -290,26 +288,44 @@ const GuestsAgent = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="relative group">
-            <Search className="absolute left-3 top-3 h-6 w-6 text-muted-foreground transition-colors group-focus-within:text-primary" />
-            <Input
-              placeholder="Rechercher un invité..."
-              value={searchTerm}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="pl-10 text-lg h-12 border-2 border-muted-foreground/20 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:border-primary/50 transition-all duration-300"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setSelectedGuest(null);
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 group">
+              <Search className="absolute left-3 top-3 h-6 w-6 text-muted-foreground transition-colors group-focus-within:text-primary" />
+              <Input
+                placeholder="Rechercher un invité..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    applySearch();
+                  }
                 }}
-                aria-label="Effacer la recherche"
-                className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                ✕
-              </button>
-            )}
+                className="pl-10 text-lg h-12 border-2 border-muted-foreground/20 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:border-primary/50 transition-all duration-300"
+              />
+              {searchInput && (
+                <button
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchTerm("");
+                    setSelectedGuest(null);
+                  }}
+                  aria-label="Effacer la recherche"
+                  className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="default"
+              onClick={applySearch}
+              className="h-12 px-4 flex items-center gap-2"
+            >
+              <Search className="h-4 w-4" />
+              Rechercher
+            </Button>
           </div>
           {searchTerm && (
             <p className="text-sm text-muted-foreground mt-2">

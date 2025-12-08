@@ -656,7 +656,7 @@ const Events = () => {
                     </Button>
                   </>
                 )}
-                {selectedEvent.status === "en_attente" && (
+                {(selectedEvent.status === "en_attente" || selectedEvent.status === "confirme") && (
                   <Button
                     type="button"
                     variant="outline"

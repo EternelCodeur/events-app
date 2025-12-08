@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +15,7 @@ interface AttendanceDay {
   mins: number; // minutes travaillées ce jour
   arrivalSignatureUrl?: string | null;
   departureSignatureUrl?: string | null;
+  eventTitle?: string | null; // concat des titres d'événements ce jour-là
 }
 
 interface AttendanceSummary {
@@ -117,6 +119,7 @@ const StaffAttendancePage: React.FC = () => {
   const monthIndex = (month || now.getMonth() + 1) - 1; // 0-11
 
   const [rows, setRows] = useState<BackendAttendanceRow[]>([]);
+  const [signatureUrls, setSignatureUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     (async () => {
@@ -139,18 +142,47 @@ const StaffAttendancePage: React.FC = () => {
     const res = await fetchWithAuth(url);
     if (!res.ok) { setRows([]); return; }
     const data = await res.json();
-    setRows(Array.isArray(data) ? data : []);
+    const rows = Array.isArray(data)
+      ? data
+      : Array.isArray((data as any)?.data)
+        ? (data as any).data
+        : [];
+    setRows(rows as BackendAttendanceRow[]);
   }, [id, period]);
 
   useEffect(() => { void loadRows(); }, [loadRows]);
+
+  useEffect(() => {
+    const urls = new Set<string>();
+    for (const r of rows) {
+      if (r.arrivalSignatureUrl) urls.add(r.arrivalSignatureUrl);
+      if (r.departureSignatureUrl) urls.add(r.departureSignatureUrl);
+    }
+    urls.forEach((u) => {
+      if (signatureUrls[u]) return;
+      void (async () => {
+        try {
+          const res = await fetchWithAuth(u);
+          if (!res.ok) return;
+          const blob = await res.blob();
+          const objUrl = URL.createObjectURL(blob);
+          setSignatureUrls((prev) => ({ ...prev, [u]: objUrl }));
+        } catch {
+          /* noop */
+        }
+      })();
+    });
+  }, [rows, signatureUrls]);
 
   const summary = useMemo(() => {
     const daysInMonth = new Date(year || new Date().getFullYear(), monthIndex + 1, 0).getDate();
     const perDay: AttendanceDay[] = [];
     const pad2 = (n: number) => String(n).padStart(2, "0");
-    const timeFromIso = (iso: string) => {
-      // expects YYYY-MM-DDTHH:MM:SS
-      const t = iso.split("T")[1] || "";
+    const timeFromIso = (iso: string | null) => {
+      if (!iso) return null;
+      // support formats "YYYY-MM-DDTHH:MM:SS" ou "YYYY-MM-DD HH:MM:SS"
+      const parts = iso.split(/[T ]/);
+      const t = parts[1] || "";
       return t.slice(0, 5) || null;
     };
     const effectiveDate = (r: BackendAttendanceRow) => (r.arrivedAt ? r.arrivedAt.slice(0, 10) : r.date);
@@ -176,6 +208,7 @@ const StaffAttendancePage: React.FC = () => {
       let outTime: string | null = null;
       let arrSig: string | null = null;
       let depSig: string | null = null;
+      const titles = new Set<string>();
       for (const r of dayRows) {
         if (r.arrivedAt) {
           const t = timeFromIso(r.arrivedAt);
@@ -185,8 +218,20 @@ const StaffAttendancePage: React.FC = () => {
           const t = timeFromIso(r.departedAt);
           if (t && (!outTime || t > outTime)) { outTime = t; depSig = r.departureSignatureUrl || depSig; }
         }
+        if (r.eventTitle) {
+          titles.add(r.eventTitle);
+        }
       }
-      perDay.push({ date: dateStr, in: inTime, out: outTime, mins: minutesBetween(dateStr, inTime, outTime), arrivalSignatureUrl: arrSig, departureSignatureUrl: depSig });
+      const titleCombined = Array.from(titles).join(", ") || null;
+      perDay.push({
+        date: dateStr,
+        in: inTime,
+        out: outTime,
+        mins: minutesBetween(dateStr, inTime, outTime),
+        arrivalSignatureUrl: arrSig,
+        departureSignatureUrl: depSig,
+        eventTitle: titleCombined,
+      });
     }
     return { perDay } as AttendanceSummary;
   }, [rows, year, monthIndex]);
@@ -269,9 +314,10 @@ const StaffAttendancePage: React.FC = () => {
                 <TableRow className="bg-blue-50 print:bg-blue-100">
                   <TableHead className="text-center">Jour</TableHead>
                   <TableHead className="text-center">Date</TableHead>
+                  <TableHead className="text-center">Événement(s)</TableHead>
                   <TableHead className="text-center">Heure d'arrivée</TableHead>
-                  <TableHead className="text-center">Heure de départ</TableHead>
                   <TableHead className="text-center">Signature arrivée</TableHead>
+                  <TableHead className="text-center">Heure de départ</TableHead>
                   <TableHead className="text-center">Signature départ</TableHead>
                   <TableHead className="text-center">Total</TableHead>
                 </TableRow>
@@ -286,45 +332,28 @@ const StaffAttendancePage: React.FC = () => {
                     <TableRow key={e.date} className="even:bg-muted/40 print:even:bg-gray-100">
                       <TableCell className="capitalize text-center">{jour}</TableCell>
                       <TableCell className="text-center">{dateLabel}</TableCell>
+                      <TableCell className="text-center max-w-xs truncate" title={e.eventTitle || undefined}>
+                        {e.eventTitle ?? "-"}
+                      </TableCell>
                       <TableCell className="text-center">{e.in ?? "-"}</TableCell>
+                      <TableCell className="text-center">
+                        {e.arrivalSignatureUrl && signatureUrls[e.arrivalSignatureUrl] ? (
+                          <img
+                            src={signatureUrls[e.arrivalSignatureUrl]}
+                            alt="Signature d'arrivée"
+                            className="inline-block max-h-12 mx-auto object-contain border rounded"
+                          />
+                        ) : e.arrivalSignatureUrl ? "..." : "-"}
+                      </TableCell>
                       <TableCell className="text-center">{e.out ?? "-"}</TableCell>
                       <TableCell className="text-center">
-                        {e.arrivalSignatureUrl ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                const res = await fetchWithAuth(e.arrivalSignatureUrl);
-                                const blob = await res.blob();
-                                const url = URL.createObjectURL(blob);
-                                window.open(url, "_blank");
-                              } catch { /* noop */ }
-                            }}
-                            title="Voir la signature d'arrivée"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        ) : "-"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {e.departureSignatureUrl ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                const res = await fetchWithAuth(e.departureSignatureUrl);
-                                const blob = await res.blob();
-                                const url = URL.createObjectURL(blob);
-                                window.open(url, "_blank");
-                              } catch { /* noop */ }
-                            }}
-                            title="Voir la signature de départ"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        ) : "-"}
+                        {e.departureSignatureUrl && signatureUrls[e.departureSignatureUrl] ? (
+                          <img
+                            src={signatureUrls[e.departureSignatureUrl]}
+                            alt="Signature de départ"
+                            className="inline-block max-h-12 mx-auto object-contain border rounded"
+                          />
+                        ) : e.departureSignatureUrl ? "..." : "-"}
                       </TableCell>
                       <TableCell className="text-center font-medium">{formatHours(e.mins)}</TableCell>
                     </TableRow>

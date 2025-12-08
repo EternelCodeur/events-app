@@ -6,47 +6,44 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { useUser } from "@/context/UserContext";
 
-interface UserProfileData {
-  firstName: string;
-  lastName: string;
-  email: string;
-}
-
-const readProfile = (): UserProfileData => {
-  let parsed: UserProfileData | null = null;
-  try {
-    const raw = localStorage.getItem("guestlytics_user");
-    if (raw) parsed = JSON.parse(raw) as UserProfileData;
-  } catch {
-    parsed = null;
-  }
-  return (
-    parsed ?? { firstName: "Admin", lastName: "Utilisateur", email: "admin@example.com" }
-  );
-};
-
 const Profile = () => {
-  const { role } = useUser();
+  const { role, user } = useUser();
   const { toast } = useToast();
 
-  const profile = useMemo(() => readProfile(), []);
+  const profile = useMemo(() => {
+    const fullName = (user as any)?.name as string | undefined;
+    let firstName = "";
+    let lastName = "";
+    if (fullName) {
+      const parts = fullName.trim().split(/\s+/);
+      if (parts.length === 1) {
+        firstName = parts[0];
+      } else if (parts.length > 1) {
+        firstName = parts[0];
+        lastName = parts.slice(1).join(" ");
+      }
+    }
+    const email = (user as any)?.email || "";
+    return {
+      firstName: firstName || "",
+      lastName: lastName || "",
+      email: email || "",
+    };
+  }, [user]);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
 
-    const stored = localStorage.getItem("guestlytics_password");
-
-    if (stored && currentPassword !== stored) {
-      toast({ title: "Mot de passe incorrect", description: "Le mot de passe actuel est invalide.", variant: "destructive" });
+    if (!currentPassword) {
+      toast({ title: "Mot de passe actuel requis", description: "Veuillez saisir votre mot de passe actuel.", variant: "destructive" });
       return;
     }
-
     if (!newPassword || newPassword.length < 6) {
       toast({ title: "Nouveau mot de passe trop court", description: "Minimum 6 caractères.", variant: "destructive" });
       return;
@@ -58,11 +55,32 @@ const Profile = () => {
 
     setSubmitting(true);
     try {
-      localStorage.setItem("guestlytics_password", newPassword);
+      const res = await fetch("/api/auth/password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          confirmPassword,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const msg = (data as any)?.message || "Impossible de changer le mot de passe";
+        toast({ title: "Erreur", description: msg, variant: "destructive" });
+        return;
+      }
+
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      toast({ title: "Mot de passe mis à jour", description: "Votre mot de passe a été changé avec succès." });
+      toast({ title: "Mot de passe mis à jour", description: (data as any)?.message || "Votre mot de passe a été changé avec succès." });
+    } catch (err) {
+      const msg = (err as { message?: string })?.message || "Impossible de changer le mot de passe";
+      toast({ title: "Erreur", description: msg, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -80,14 +98,10 @@ const Profile = () => {
           <CardHeader>
             <h2 className="text-xl font-semibold text-foreground">Informations personnelles</h2>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Prénom</Label>
-              <Input value={profile.firstName} readOnly disabled />
-            </div>
+          <CardContent className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
               <Label>Nom</Label>
-              <Input value={profile.lastName} readOnly disabled />
+              <Input value={profile.firstName} readOnly disabled />
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label>Email</Label>

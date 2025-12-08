@@ -156,3 +156,77 @@ Schedule::call(function () {
         ]);
     }
 })->everyMinute();
+
+Schedule::call(function () {
+    $wa = app(\App\Services\WhatsAppService::class);
+    if (!$wa->enabled()) {
+        return;
+    }
+    $nowTime = date('H:i');
+    $sendHour = env('WHATSAPP_REMINDER_HOUR', '09:00');
+    if ($nowTime < $sendHour) {
+        return;
+    }
+    $tomorrowDate = date('Y-m-d', strtotime('+1 day'));
+    if (!\Illuminate\Support\Facades\Schema::hasTable('event_notifications')) {
+        return;
+    }
+    $events = DB::table('events')
+        ->where('status', 'confirme')
+        ->whereDate('date', '=', $tomorrowDate)
+        ->get();
+    foreach ($events as $ev) {
+        $venueName = $ev->venue_id ? (DB::table('venues')->where('id', $ev->venue_id)->value('name') ?? '') : '';
+        $start = $ev->start_time ? substr((string) $ev->start_time, 0, 5) : null;
+        $end = $ev->end_time ? substr((string) $ev->end_time, 0, 5) : null;
+        $timePart = $start && $end ? ($start . ' - ' . $end) : ($start ?: ($end ? ("jusqu'à " . $end) : ''));
+        $parts = array_filter([(string) $ev->title, $timePart, $venueName], function ($v) {
+            return $v !== null && $v !== '';
+        });
+        $body = 'Rappel: événement demain ' . $tomorrowDate . ' — ' . implode(' | ', $parts) . '.';
+        $phones = DB::table('event_staff_assignments as esa')
+            ->join('staff as s', 's.id', '=', 'esa.staff_id')
+            ->where('esa.event_id', $ev->id)
+            ->whereNotNull('s.phone')
+            ->pluck('s.phone')
+            ->all();
+        $entreprisePhone = DB::table('entreprises')->where('id', $ev->entreprise_id)->value('phone');
+        if ($entreprisePhone) {
+            $phones[] = $entreprisePhone;
+        }
+        $normalizedMap = [];
+        foreach ($phones as $p) {
+            $n = $wa->normalize((string) $p);
+            if ($n) {
+                $normalizedMap[$n] = true;
+            }
+        }
+        $recipients = array_keys($normalizedMap);
+        foreach ($recipients as $to) {
+            $already = DB::table('event_notifications')
+                ->where('event_id', $ev->id)
+                ->where('channel', 'whatsapp')
+                ->where('category', 'jminus1')
+                ->where('recipient', $to)
+                ->exists();
+            if ($already) {
+                continue;
+            }
+            $res = $wa->sendText($to, $body);
+            $ok = is_array($res) && ($res['ok'] ?? false);
+            DB::table('event_notifications')->insert([
+                'entreprise_id' => $ev->entreprise_id,
+                'event_id' => $ev->id,
+                'channel' => 'whatsapp',
+                'category' => 'jminus1',
+                'recipient' => $to,
+                'message' => $body,
+                'status' => $ok ? 'sent' : 'failed',
+                'meta' => json_encode($res),
+                'sent_at' => $ok ? now() : null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+})->hourly();
