@@ -32,13 +32,57 @@ export default function Landing() {
             <h1 className="text-4xl md:text-5xl font-extrabold leading-tight">La plateforme pour gérer vos évènements et vos salles</h1>
             <p className="mt-4 text-muted-foreground text-lg">Planifiez, organisez et centralisez vos évènements, invités, prestataires et médias au même endroit.</p>
           </div>
-          <div className="rounded-2xl border border-border/60 bg-white/60 dark:bg-white/5 backdrop-blur-sm shadow-md overflow-hidden">
-            <img
-              src="https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1600&auto=format&fit=crop"
-              alt="Illustration d'organisation d'évènements"
-              className="w-full h-72 md:h-[420px] object-cover"
-              loading="lazy"
-            />
+          <div className="rounded-2xl border border-border/60 bg-white/60 dark:bg-white/5 backdrop-blur-sm shadow-md overflow-hidden p-3">
+            <div className="grid grid-cols-4 grid-rows-2 gap-2 md:gap-3 h-72 md:h-[420px]">
+              <img
+                src="img1.jpeg"
+                alt="Salle d'évènement 1"
+                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+              />
+              <img
+                src="img2.jpeg"
+                alt="Salle d'évènement 2"
+                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+              />
+              <img
+                src="img3.jpeg"
+                alt="Salle d'évènement 3"
+                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+              />
+              <img
+                src="img4.jpeg"
+                alt="Salle d'évènement 4"
+                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+              />
+              <img
+                src="img5.jpeg"
+                alt="Salle d'évènement 5"
+                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+              />
+              <img
+                src="img6.jpeg"
+                alt="Salle d'évènement 6"
+                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+              />
+              <img
+                src="img7.jpeg"
+                alt="Salle d'évènement 7"
+                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+              />
+              <img
+                src="img8.jpeg"
+                alt="Salle d'évènement 8"
+                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+              />
+            </div>
           </div>
         </section>
 
