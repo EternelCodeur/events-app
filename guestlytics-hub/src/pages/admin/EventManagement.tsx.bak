@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useParams, useNavigate } from "react-router-dom";
@@ -89,7 +89,7 @@ const EventManagement = () => {
   const [venuePhotos, setVenuePhotos] = useState<string[]>([]);
   const [eventPhotos, setEventPhotos] = useState<string[]>([]);
 
-  // Tasks (RÃ©amÃ©nagement)
+  // Tasks (Réaménagement)
   const [tasks, setTasks] = useState<EventTask[]>([]);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskName, setTaskName] = useState("");
@@ -211,7 +211,7 @@ const EventManagement = () => {
           <td>${esc(p.contact || "-")}</td>
         </tr>
       `).join("");
-      const title = esc(eventData?.title || "Ã‰vÃ©nement");
+      const title = esc(eventData?.title || "Événement");
       const date = esc(eventData?.date || "");
       const html = `<!doctype html>
         <html lang="fr">
@@ -246,10 +246,10 @@ const EventManagement = () => {
               <thead>
                 <tr>
                   <th>Types</th>
-                  <th>DÃ©signation</th>
+                  <th>Désignation</th>
                   <th>Montant</th>
                   <th>Avance</th>
-                  <th>Reste Ã  payer</th>
+                  <th>Reste à payer</th>
                   <th>Commentaires</th>
                   <th>Contact</th>
                 </tr>
@@ -306,7 +306,7 @@ const EventManagement = () => {
       </style></head><body>
       <table>
         <thead><tr>
-          <th>Types</th><th>DÃ©signation</th><th>Montant</th><th>Avance</th><th>Reste Ã  payer</th><th>Commentaires</th><th>Contact</th>
+          <th>Types</th><th>Désignation</th><th>Montant</th><th>Avance</th><th>Reste à payer</th><th>Commentaires</th><th>Contact</th>
         </tr></thead>
         <tbody>${rowsHtml || `<tr><td colspan="7" style="text-align:center;">Aucun prestataire</td></tr>`}</tbody>
         <tfoot><tr class="total">
@@ -324,7 +324,7 @@ const EventManagement = () => {
     a.download = "prestataires.xls";
     document.body.appendChild(a);
     a.click();
-    a.remove();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
@@ -354,7 +354,7 @@ const EventManagement = () => {
       let saved: ProviderItem;
       if (editingProvider) {
         saved = (await updateProvider(editingProvider.id, payload)) as ProviderItem;
-        // RafraÃ®chir la page courante aprÃ¨s modification
+        // Rafraîchir la page courante après modification
         const pageData = await getProvidersPage(id, providersPage, providersPerPage);
         setProviders(pageData.items as ProviderItem[]);
         setProvidersLastPage(pageData.lastPage);
@@ -362,7 +362,7 @@ const EventManagement = () => {
         setProvidersTotals(pageData.totals);
       } else {
         saved = (await createProvider(id, payload)) as ProviderItem;
-        // Aller Ã  la 1Ã¨re page pour voir le nouveau prestataire (ordre latest)
+        // Aller à la 1ère page pour voir le nouveau prestataire (ordre latest)
         setProvidersPage(1);
         const pageData = await getProvidersPage(id, 1, providersPerPage);
         setProviders(pageData.items as ProviderItem[]);
@@ -417,7 +417,7 @@ const EventManagement = () => {
     if (!id) return;
     const name = taskName.trim();
     if (!name) {
-      setTaskError("Le nom de la tÃ¢che est requis");
+      setTaskError("Le nom de la tâche est requis");
       return;
     }
     try {
@@ -434,17 +434,17 @@ const EventManagement = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">
-            {id ? (eventData?.title || "Gestion de l'Ã©vÃ©nement") : "Aucun Ã©vÃ©nement sÃ©lectionnÃ©"}
+            {id ? (eventData?.title || "Gestion de l'événement") : "Aucun événement sélectionné"}
           </h1>
           {hasEvent && loading && (
             <p className="text-muted-foreground">Chargement...</p>
           )}
           {hasEvent && !loading && eventData && (
             
-            <p className="text-muted-foreground">Planifiez et assignez les tÃ¢ches avant et aprÃ¨s l'Ã©vÃ©nement.</p>
+            <p className="text-muted-foreground">Planifiez et assignez les tâches avant et après l'événement.</p>
           )}
           {(!hasEvent || (!loading && !eventData)) && (
-            <p className="text-muted-foreground">{loadError ? loadError : "Aucun Ã©vÃ©nement sÃ©lectionnÃ©. Planifiez et assignez les tÃ¢ches avant et aprÃ¨s l'Ã©vÃ©nement."}</p>
+            <p className="text-muted-foreground">{loadError ? loadError : "Aucun événement sélectionné. Planifiez et assignez les tâches avant et après l'événement."}</p>
           )}
         </div>
         {hasEvent && (
@@ -458,7 +458,7 @@ const EventManagement = () => {
       <Card>
         <CardHeader>
           <h2 className="text-xl font-semibold text-foreground">
-            Gestion opÃ©rationnelle
+            Gestion opérationnelle
           </h2>
         </CardHeader>
         <CardContent>
@@ -469,12 +469,12 @@ const EventManagement = () => {
               <div className="flex flex-col sm:flex-row gap-4">
                 {forcedPhase === "avant" && (
                   <Button type="button" className="flex-1 bg-primary hover:bg-primary-hover text-white" disabled>
-                    Avant l'Ã©vÃ©nement
+                    Avant l'événement
                   </Button>
                 )}
                 {forcedPhase === "apres" && (
                   <Button type="button" className="flex-1 bg-primary hover:bg-primary-hover text-white" disabled>
-                    AprÃ¨s l'Ã©vÃ©nement
+                    Après l'événement
                   </Button>
                 )}
               </div>
@@ -484,8 +484,8 @@ const EventManagement = () => {
                   {!isAssignForbidden && (
                     <Card className="border border-border">
                       <CardHeader>
-                        <h3 className="text-lg font-semibold text-foreground">Personnel de l'Ã©vÃ©nement</h3>
-                        <p className="text-sm text-muted-foreground">Assigner des personnes Ã  cet Ã©vÃ©nement</p>
+                        <h3 className="text-lg font-semibold text-foreground">Personnel de l'événement</h3>
+                        <p className="text-sm text-muted-foreground">Assigner des personnes à cet événement</p>
                       </CardHeader>
                       <CardContent>
                         <div className="flex gap-2">
@@ -502,20 +502,20 @@ const EventManagement = () => {
                   )}
                   <Card className="border border-border">
                     <CardHeader>
-                      <h3 className="text-lg font-semibold text-foreground">RÃ©amÃ©nagement</h3>
+                      <h3 className="text-lg font-semibold text-foreground">Réaménagement</h3>
                     </CardHeader>
                     <CardContent>
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={() => { setTaskName(""); setTaskError(""); setTaskDialogOpen(true); }}>
                             <Plus className="w-4 h-4 mr-1" />
-                            CrÃ©er une tÃ¢che
+                            Créer une tâche
                           </Button>
                         </div>
                         {!isAssignForbidden && (
                           <>
                             {tasks.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">Aucune tÃ¢che. CrÃ©ez votre premiÃ¨re tÃ¢che.</p>
+                              <p className="text-sm text-muted-foreground">Aucune tâche. Créez votre première tâche.</p>
                             ) : (
                               <div className="flex flex-wrap gap-2">
                                 {tasks.map((t) => (
@@ -550,7 +550,7 @@ const EventManagement = () => {
                           className="flex-1 bg-primary text-white hover:bg-primary-hover hover:text-white"
                           onClick={goGuests}
                         >
-                          Gestions des invitÃ©s
+                          Gestions des invités
                         </Button>
                       </div>
                     </CardContent>
@@ -562,8 +562,8 @@ const EventManagement = () => {
                   {!isAssignForbidden && (
                     <Card className="border border-border">
                       <CardHeader>
-                        <h3 className="text-lg font-semibold text-foreground">Personnel de l'Ã©vÃ©nement</h3>
-                        <p className="text-sm text-muted-foreground">Assigner des personnes Ã  cet Ã©vÃ©nement</p>
+                        <h3 className="text-lg font-semibold text-foreground">Personnel de l'événement</h3>
+                        <p className="text-sm text-muted-foreground">Assigner des personnes à cet événement</p>
                       </CardHeader>
                       <CardContent>
                         <div className="flex gap-2">
@@ -580,20 +580,20 @@ const EventManagement = () => {
                   )}
                   <Card className="border border-border">
                     <CardHeader>
-                      <h3 className="text-lg font-semibold text-foreground">TÃ¢ches aprÃ¨s l'Ã©vÃ©nement</h3>
+                      <h3 className="text-lg font-semibold text-foreground">Tâches après l'événement</h3>
                     </CardHeader>
                     <CardContent>
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={() => { setTaskName(""); setTaskError(""); setTaskDialogOpen(true); }}>
                             <Plus className="w-4 h-4 mr-1" />
-                            CrÃ©er une tÃ¢che
+                            Créer une tâche
                           </Button>
                         </div>
                         {!isAssignForbidden && (
                           <>
                             {tasks.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">Aucune tÃ¢che. CrÃ©ez votre premiÃ¨re tÃ¢che.</p>
+                              <p className="text-sm text-muted-foreground">Aucune tâche. Créez votre première tâche.</p>
                             ) : (
                               <div className="flex flex-wrap gap-2">
                                 {tasks.map((t) => (
@@ -608,7 +608,7 @@ const EventManagement = () => {
                       </div>
                     </CardContent>
                   </Card>
-                  {/* Mise en place (lecture seule): accÃ¨s aux Ã©crans Tables & InvitÃ©s */}
+                  {/* Mise en place (lecture seule): accès aux écrans Tables & Invités */}
                   <Card className="border border-border">
                     <CardHeader>
                       <h3 className="text-lg font-semibold text-foreground">Mise en place</h3>
@@ -629,7 +629,7 @@ const EventManagement = () => {
                           className="flex-1 bg-primary text-white hover:bg-primary-hover hover:text-white"
                           onClick={goGuests}
                         >
-                          Gestions des invitÃ©s
+                          Gestions des invités
                         </Button>
                       </div>
                     </CardContent>
@@ -639,7 +639,7 @@ const EventManagement = () => {
             </div>
           ) : (
             <p className="text-muted-foreground text-sm">
-              Aucun Ã©vÃ©nement sÃ©lectionnÃ©. Retournez Ã  la liste des Ã©vÃ©nements pour en choisir un.
+              Aucun événement sélectionné. Retournez à la liste des événements pour en choisir un.
             </p>
           )}
         </CardContent>
@@ -672,7 +672,7 @@ const EventManagement = () => {
                   <div className="text-xs text-white/90">Total avances</div>
                   <div className="text-xl font-semibold drop-shadow-sm">{totalAdvance.toLocaleString("fr-FR")} CFA</div>
                 </div>
-                {/* Reste budget: blancs/accents lÃ©gers */}
+                {/* Reste budget: blancs/accents légers */}
                 <div className="p-4 rounded-xl bg-gradient-to-br from-white from-blue-700 to-blue-300 text-foreground text-white shadow-sm border border-border">
                   <div className="text-xs text-white/90">Reste budget</div>
                   <div className={`text-xl font-semibold drop-shadow-sm ${remainingBudget === 0 && eventBudgetCfa > 0 ? "text-destructive" : ""}`}>
@@ -686,10 +686,10 @@ const EventManagement = () => {
                   <thead>
                     <tr className="text-left bg-gray-200 border-b border-border">
                       <th className="py-2 pr-2 text-center">Types</th>
-                      <th className="py-2 pr-2 text-center">DÃ©signation</th>
+                      <th className="py-2 pr-2 text-center">Désignation</th>
                       <th className="py-2 pr-2 text-center">Montant</th>
                       <th className="py-2 pr-2 text-center">Avance</th>
-                      <th className="py-2 pr-2 text-center">Reste Ã  payer</th>
+                      <th className="py-2 pr-2 text-center">Reste à payer</th>
                       <th className="py-2 pr-2 text-center">Commentaires</th>
                       <th className="py-2 pr-2 text-center">Contact</th>
                       <th className="py-2 pr-2">Actions</th>
@@ -739,7 +739,7 @@ const EventManagement = () => {
 
               <div className="mt-3 flex items-center justify-between text-sm">
                 <div className="text-muted-foreground">
-                  Page {providersPage} / {providersLastPage} â€¢ {providersPerPage} par page â€¢ {providersTotal} au total
+                  Page {providersPage} / {providersLastPage} • {providersPerPage} par page • {providersTotal} au total
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -751,7 +751,7 @@ const EventManagement = () => {
                       providersSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                     }}
                   >
-                    PrÃ©cÃ©dent
+                    Précédent
                   </Button>
                   <Button
                     type="button"
@@ -782,10 +782,10 @@ const EventManagement = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-sm text-muted-foreground">Type</label>
-              <Input value={provType} onChange={(e) => setProvType(e.target.value)} placeholder="DÃ©coration, Alliances..." />
+              <Input value={provType} onChange={(e) => setProvType(e.target.value)} placeholder="Décoration, Alliances..." />
             </div>
             <div>
-              <label className="text-sm text-muted-foreground">DÃ©signation</label>
+              <label className="text-sm text-muted-foreground">Désignation</label>
               <Input value={provDesignation} onChange={(e) => setProvDesignation(e.target.value)} placeholder="Nom du prestataire" />
             </div>
             <div>
@@ -802,7 +802,7 @@ const EventManagement = () => {
             </div>
             <div className="md:col-span-2">
               <label className="text-sm text-muted-foreground">Contact</label>
-              <Input type="number" value={provContact} onChange={(e) => setProvContact(e.target.value)} placeholder="TÃ©lÃ©phone" />
+              <Input type="number" value={provContact} onChange={(e) => setProvContact(e.target.value)} placeholder="Téléphone" />
             </div>
           </div>
           <DialogFooter>
@@ -815,15 +815,15 @@ const EventManagement = () => {
       <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>CrÃ©er une tÃ¢che</DialogTitle>
+            <DialogTitle>Créer une tâche</DialogTitle>
           </DialogHeader>
           {taskError && <div className="text-destructive text-sm mb-2">{taskError}</div>}
           <div className="space-y-2">
-            <label className="text-sm text-muted-foreground">Nom de la tÃ¢che</label>
+            <label className="text-sm text-muted-foreground">Nom de la tâche</label>
             <Input
               value={taskName}
               onChange={(e) => setTaskName(e.target.value)}
-              placeholder="Ex: Sono, LumiÃ¨res, VidÃ©o, etc."
+              placeholder="Ex: Sono, Lumières, Vidéo, etc."
             />
           </div>
           <DialogFooter>

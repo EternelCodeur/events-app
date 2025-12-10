@@ -76,7 +76,7 @@ export default function VenueAlbum() {
       a.download = filename;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      a.remove();
     } catch { /* noop */ }
   }
 

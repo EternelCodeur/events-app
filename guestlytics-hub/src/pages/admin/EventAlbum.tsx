@@ -83,7 +83,7 @@ const EventAlbum: React.FC = () => {
       a.download = filename;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      a.remove();
     } catch { /* noop */ }
   }
 
