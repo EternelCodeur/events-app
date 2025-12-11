@@ -18,23 +18,12 @@ const TOKEN_KEY = "guestlytics_auth_token";
 const TOKEN_SESSION_KEY = "guestlytics_auth_token_session";
 
 export function getToken(): string | null {
-  // JWT now lives in HttpOnly cookie; do not expose token to JS
   return null;
 }
 
-function persistAuth(user: AuthUser, _token: string, remember: boolean) {
+function persistAuth(user: AuthUser, token: string, remember: boolean) {
   currentUser = user;
-  if (remember) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-      sessionStorage.removeItem(SESSION_KEY);
-    } catch { /* noop */ }
-  } else {
-    try {
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
-      localStorage.removeItem(STORAGE_KEY);
-    } catch { /* noop */ }
-  }
+  currentToken = null;
 }
 
 export async function login(
@@ -82,18 +71,6 @@ export async function logout(): Promise<void> {
 
 export async function getMe(): Promise<AuthUser | null> {
   if (currentUser) return currentUser;
-  // rehydrate from storage (prefer persistent if both are present)
-  try {
-    const lUser = localStorage.getItem(STORAGE_KEY);
-    if (lUser) currentUser = (JSON.parse(lUser) as AuthUser) ?? null;
-  } catch { currentUser = null; }
-  if (currentUser) return currentUser;
-  try {
-    const sUser = sessionStorage.getItem(SESSION_KEY);
-    if (sUser) currentUser = (JSON.parse(sUser) as AuthUser) ?? null;
-  } catch { currentUser = null; }
-  if (currentUser) return currentUser;
-  // fetch from backend if token exists
   try {
     const res = await fetch("/api/auth/me", { credentials: "include" });
     if (!res.ok) return null;
@@ -107,7 +84,6 @@ export async function getMe(): Promise<AuthUser | null> {
       entrepriseName: u?.entrepriseName as string | undefined,
     };
     currentUser = user;
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch { /* empty */ }
     return user;
   } catch {
     return null;
