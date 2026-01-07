@@ -13,7 +13,8 @@ export default defineConfig(({ mode }) => {
       port: 8080,
       proxy: {
         "/api": {
-          target: "https://www.okoume-events.ga",
+         // target: "https://www.okoume-events.ga",
+          target: "http://127.0.0.1:8000",
           changeOrigin: true,
           secure: false,
           configure: (proxy) => {

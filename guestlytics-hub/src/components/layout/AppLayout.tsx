@@ -135,35 +135,6 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
           </div>
 
           <div className="flex items-center gap-3">
-            {role !== "hotesse" && role !== "utilisateur" && role !== "superadmin" && (
-              <>
-                {/* Notifications */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="relative hover:bg-muted"
-                    >
-                      <Bell className="h-5 w-5" />
-                      <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-destructive text-[10px]">
-                        3
-                      </Badge>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-80">
-                    <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <div className="p-2 text-sm text-muted-foreground">
-                      <p className="py-2">Nouveau pointage: Marie Dubois</p>
-                      <p className="py-2">Événement demain: Mariage Dupont</p>
-                      <p className="py-2">Alerte retard: Jean Martin</p>
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
-
             {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

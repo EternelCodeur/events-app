@@ -100,7 +100,7 @@ const Users: React.FC = () => {
     <div className="space-y-6 p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-1">Gestion des utilisateurs</h1>
+          <h1 className="text-xl lg:text-3xl font-bold text-foreground mb-1">Utilisateurs</h1>
           <p className="text-muted-foreground">Créez et gérez les administrateurs, hôtesses et utilisateurs.</p>
         </div>
         <Button type="button" className="bg-primary hover:bg-primary-hover text-white" onClick={openCreate}>

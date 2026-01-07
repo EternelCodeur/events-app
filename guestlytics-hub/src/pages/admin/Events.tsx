@@ -22,7 +22,17 @@ import { getVenues as fetchVenues, type Venue } from "@/lib/venues";
 
 type EventStatus = "en_attente" | "confirme" | "annuler" | "en_cours" | "termine" | "echoue";
 type VenueArea = "interieur" | "exterieur" | "les_deux";
-type EventType = "mariage" | "celebration_religieuse" | "cocktail";
+type EventType =
+  | "mariage"
+  | "celebration_religieuse"
+  | "cocktail"
+  | "seminaire"
+  | "congres"
+  | "fiancailles"
+  | "projections_de_films"
+  | "expositions"
+  | "concerts"
+  | "spectacles";
 
 interface EventItem {
   id: string;
@@ -190,7 +200,27 @@ const Events = () => {
   const mapAreaLabel = (a?: VenueArea) =>
     a === "interieur" ? "Intérieur" : a === "exterieur" ? "Extérieur" : a === "les_deux" ? "Les deux" : "";
   const mapEventTypeLabel = (t?: EventType) =>
-    t === "mariage" ? "Mariage" : t === "celebration_religieuse" ? "Célébration religieuse" : t === "cocktail" ? "Cocktail" : "";
+    t === "mariage"
+      ? "Mariage"
+      : t === "celebration_religieuse"
+        ? "Célébration religieuse"
+        : t === "cocktail"
+          ? "Cocktail"
+          : t === "seminaire"
+            ? "Séminaires"
+            : t === "congres"
+              ? "Congrès"
+              : t === "fiancailles"
+                ? "Fiançailles"
+                : t === "projections_de_films"
+                  ? "Projections de films"
+                  : t === "expositions"
+                    ? "Expositions"
+                    : t === "concerts"
+                      ? "Concerts"
+                      : t === "spectacles"
+                        ? "Spectacles"
+                        : "";
 
   const openCreateDialog = () => {
     setEditingEvent(null);
@@ -270,7 +300,7 @@ const Events = () => {
     if (!formEventType) {
       return;
     }
-    if ((formEventType === "mariage" || formEventType === "cocktail" || formEventType === "celebration_religieuse") && formVenue && !formAreaChoice) {
+    if (formVenue && !formAreaChoice) {
       return;
     }
     if (formEventType === "mariage" && formVenue) {
@@ -731,7 +761,7 @@ const Events = () => {
               </div>
               <div>
               <label className="block text-sm font-medium mb-1">Type d'événement</label>
-              <select
+                <select
                 aria-label="Sélectionner le type d'événement"
                 className="border border-border rounded-md px-2 py-2 text-sm bg-background w-full"
                 value={formEventType}
@@ -742,6 +772,13 @@ const Events = () => {
                   <option value="mariage">Mariage</option>
                   <option value="celebration_religieuse">Célébration religieuse</option>
                   <option value="cocktail">Cocktail</option>
+                  <option value="seminaire">Séminaires</option>
+                  <option value="congres">Congrès</option>
+                  <option value="fiancailles">Fiançailles</option>
+                  <option value="projections_de_films">Projections de films</option>
+                  <option value="expositions">Expositions</option>
+                  <option value="concerts">Concerts</option>
+                  <option value="spectacles">Spectacles</option>
                 </select>
               </div>
               <div>
@@ -820,7 +857,7 @@ const Events = () => {
                 ))}
               </select>
             </div>
-              {formEventType && (formEventType === "mariage" || formEventType === "cocktail" || formEventType === "celebration_religieuse") && formVenue && (
+              {formEventType && formVenue && (
                 <div>
                   <label className="block text-sm font-medium mb-1">Zone</label>
                   <select

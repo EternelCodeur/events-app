@@ -1,6 +1,16 @@
 export type EventStatus = "en_attente" | "confirme" | "annuler" | "en_cours" | "termine" | "echoue";
 export type VenueArea = "interieur" | "exterieur" | "les_deux";
-export type EventType = "mariage" | "celebration_religieuse" | "cocktail";
+export type EventType =
+  | "mariage"
+  | "celebration_religieuse"
+  | "cocktail"
+  | "seminaire"
+  | "congres"
+  | "fiancailles"
+  | "projections_de_films"
+  | "expositions"
+  | "concerts"
+  | "spectacles";
 
 export type EventItem = {
   id: string;
