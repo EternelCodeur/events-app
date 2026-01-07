@@ -1,5 +1,3 @@
-import { API_BASE_URL } from "./config";
-
 export type ProviderItem = {
   id: string;
   eventId: string;
@@ -100,14 +98,14 @@ export type ProvidersPageResult = {
 };
 
 export async function getProviders(eventId: string): Promise<ProviderItem[]> {
-  const res = await request<unknown>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/providers`, { method: "GET" });
+  const res = await request<unknown>(`/api/events/${encodeURIComponent(eventId)}/providers`, { method: "GET" });
   if (Array.isArray(res)) return res as ProviderItem[];
   const obj = res as ProvidersIndexResponse;
   return Array.isArray(obj?.data) ? (obj.data as ProviderItem[]) : [];
 }
 
 export async function getProvidersPage(eventId: string, page = 1, perPage = 7): Promise<ProvidersPageResult> {
-  const res = await request<ProvidersIndexResponse>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/providers?page=${encodeURIComponent(String(page))}&perPage=${encodeURIComponent(String(perPage))}`, { method: "GET" });
+  const res = await request<ProvidersIndexResponse>(`/api/events/${encodeURIComponent(eventId)}/providers?page=${encodeURIComponent(String(page))}&perPage=${encodeURIComponent(String(perPage))}`, { method: "GET" });
   const items = Array.isArray(res.data) ? res.data : [];
   const pageNum = res.meta?.current_page ?? page;
   const lastPage = res.meta?.last_page ?? page;
@@ -122,19 +120,19 @@ export async function getProvidersPage(eventId: string, page = 1, perPage = 7): 
 }
 
 export async function createProvider(eventId: string, payload: CreateProviderPayload): Promise<ProviderItem> {
-  return request<ProviderItem>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/providers`, {
+  return request<ProviderItem>(`/api/events/${encodeURIComponent(eventId)}/providers`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function updateProvider(id: string, payload: UpdateProviderPayload): Promise<ProviderItem> {
-  return request<ProviderItem>(`${API_BASE_URL}/api/providers/${encodeURIComponent(id)}`, {
+  return request<ProviderItem>(`/api/providers/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
 
 export async function deleteProvider(id: string): Promise<void> {
-  await request<void>(`${API_BASE_URL}/api/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  await request<void>(`/api/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

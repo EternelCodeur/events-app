@@ -1,5 +1,4 @@
 import { getToken, refresh } from "./auth";
-import { API_BASE_URL } from "./config";
 
 export type VenueImageItem = {
   id: string;
@@ -39,11 +38,11 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function getVenueImages(venueId: string): Promise<VenueImageItem[]> {
-  return request<VenueImageItem[]>(`${API_BASE_URL}/api/venues/${encodeURIComponent(venueId)}/images`, { method: "GET" });
+  return request<VenueImageItem[]>(`/api/venues/${encodeURIComponent(venueId)}/images`, { method: "GET" });
 }
 
 export async function getVenueImageBlobUrl(imageId: string): Promise<string> {
-  const url = `${API_BASE_URL}/api/venue-images/${encodeURIComponent(imageId)}/file`;
+  const url = `/api/venue-images/${encodeURIComponent(imageId)}/file`;
   const headers = await authHeaders();
   let res = await fetch(url, { credentials: "include", headers });
   if (res.status === 401) {
@@ -73,7 +72,7 @@ export async function uploadVenueImages(
     const token = getToken();
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${API_BASE_URL}/api/venues/${encodeURIComponent(venueId)}/images`);
+      xhr.open("POST", `/api/venues/${encodeURIComponent(venueId)}/images`);
       if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       xhr.withCredentials = true;
       xhr.upload.onprogress = (e) => {
@@ -116,5 +115,5 @@ export async function uploadVenueImages(
 }
 
 export async function deleteVenueImage(imageId: string): Promise<void> {
-  await request<void>(`${API_BASE_URL}/api/venue-images/${encodeURIComponent(imageId)}`, { method: "DELETE" });
+  await request<void>(`/api/venue-images/${encodeURIComponent(imageId)}`, { method: "DELETE" });
 }

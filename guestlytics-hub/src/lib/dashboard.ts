@@ -1,5 +1,3 @@
-import { API_BASE_URL } from "./config";
-
 export type DashboardMetrics = {
   eventsUpcomingCount: number;
   venuesOccupiedCount: number;
@@ -58,6 +56,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function getDashboardMetrics(entrepriseId?: string): Promise<DashboardMetrics> {
-  const url = entrepriseId ? `${API_BASE_URL}/api/dashboard/metrics?entrepriseId=${encodeURIComponent(entrepriseId)}` : `${API_BASE_URL}/api/dashboard/metrics`;
+  const url = entrepriseId ? `/api/dashboard/metrics?entrepriseId=${encodeURIComponent(entrepriseId)}` : "/api/dashboard/metrics";
   return request<DashboardMetrics>(url, { method: "GET" });
 }
