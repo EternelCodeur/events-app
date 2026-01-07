@@ -1,3 +1,6 @@
+// URL de base de l'API - en production, utiliser l'URL complète
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+
 // Utilitaire simple pour parser une valeur entière positive avec un fallback
 function parsePositiveInt(raw: string | number | undefined | null, fallback: number): number {
   const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10);

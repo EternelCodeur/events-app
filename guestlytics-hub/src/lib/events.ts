@@ -105,7 +105,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
-const API_BASE = "/api/events";
+import { API_BASE_URL } from "./config";
+
+const API_BASE = `${API_BASE_URL}/api/events`;
 
 export async function getEvents(): Promise<EventItem[]> {
   return request<EventItem[]>(`${API_BASE}`, { method: "GET" });

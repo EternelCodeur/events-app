@@ -1,4 +1,5 @@
 import type { StaffMember } from "./staff";
+import { API_BASE_URL } from "./config";
 
 async function getAuthHeader(): Promise<HeadersInit> {
   try {
@@ -54,18 +55,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function getTaskAssignments(eventId: string, taskId: string): Promise<StaffMember[]> {
-  return request<StaffMember[]>(`/api/events/${encodeURIComponent(eventId)}/tasks/${encodeURIComponent(taskId)}/assignments`, { method: "GET" });
+  return request<StaffMember[]>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tasks/${encodeURIComponent(taskId)}/assignments`, { method: "GET" });
 }
 
 export async function addTaskAssignment(eventId: string, taskId: string, staffId: string): Promise<StaffMember> {
-  return request<StaffMember>(`/api/events/${encodeURIComponent(eventId)}/tasks/${encodeURIComponent(taskId)}/assignments`, {
+  return request<StaffMember>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tasks/${encodeURIComponent(taskId)}/assignments`, {
     method: "POST",
     body: JSON.stringify({ staffId: Number(staffId) }),
   });
 }
 
 export async function removeTaskAssignment(eventId: string, taskId: string, staffId: string): Promise<void> {
-  await request<void>(`/api/events/${encodeURIComponent(eventId)}/tasks/${encodeURIComponent(taskId)}/assignments/${encodeURIComponent(staffId)}`, {
+  await request<void>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tasks/${encodeURIComponent(taskId)}/assignments/${encodeURIComponent(staffId)}`, {
     method: "DELETE",
   });
 }

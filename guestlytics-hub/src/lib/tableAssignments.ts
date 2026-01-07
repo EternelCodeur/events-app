@@ -1,4 +1,5 @@
 import type { StaffMember } from "./staff";
+import { API_BASE_URL } from "./config";
 
 async function getAuthHeader(): Promise<HeadersInit> {
   try {
@@ -58,12 +59,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function getTableAssignments(eventId: string, tableId: string): Promise<StaffMember[]> {
-  const url = `/api/events/${encodeURIComponent(eventId)}/tables/${encodeURIComponent(tableId)}/assignments`;
+  const url = `${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tables/${encodeURIComponent(tableId)}/assignments`;
   return request<StaffMember[]>(url, { method: "GET" });
 }
 
 export async function addTableAssignment(eventId: string, tableId: string, staffId: string): Promise<StaffMember> {
-  const url = `/api/events/${encodeURIComponent(eventId)}/tables/${encodeURIComponent(tableId)}/assignments`;
+  const url = `${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tables/${encodeURIComponent(tableId)}/assignments`;
   return request<StaffMember>(url, {
     method: "POST",
     body: JSON.stringify({ staffId: Number(staffId) }),
@@ -71,6 +72,6 @@ export async function addTableAssignment(eventId: string, tableId: string, staff
 }
 
 export async function removeTableAssignment(eventId: string, tableId: string, staffId: string): Promise<void> {
-  const url = `/api/events/${encodeURIComponent(eventId)}/tables/${encodeURIComponent(tableId)}/assignments/${encodeURIComponent(staffId)}`;
+  const url = `${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tables/${encodeURIComponent(tableId)}/assignments/${encodeURIComponent(staffId)}`;
   await request<void>(url, { method: "DELETE" });
 }

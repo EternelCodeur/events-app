@@ -16,6 +16,7 @@ import {
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
 import { useToast } from "@/hooks/use-toast";
 import { getXsrfTokenFromCookie } from "@/lib/auth";
+import { API_BASE_URL } from "@/lib/config";
 
 type StaffItem = { id: number; name: string; role: string; phone?: string; status?: string };
 type EventItem = { id: string; title: string; date: string; startTime?: string | null; endTime?: string | null; status: string };
@@ -195,7 +196,7 @@ const UserPointages = () => {
     (async () => {
       try {
         setLoading(true);
-        const res = await fetchWithAuth(`/api/utilisateur/events`);
+        const res = await fetchWithAuth(`${API_BASE_URL}/api/utilisateur/events`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload: unknown = await res.json();
         const list = Array.isArray((payload as any)) ? (payload as any) : (((payload as any)?.data ?? []) as unknown[]);
@@ -223,7 +224,7 @@ const UserPointages = () => {
       if (!selectedEventId) { setStaff([]); return; }
       try {
         setLoading(true);
-        const res = await fetchWithAuth(`/api/utilisateur/events/${encodeURIComponent(String(selectedEventId))}/assignments`);
+        const res = await fetchWithAuth(`${API_BASE_URL}/api/utilisateur/events/${encodeURIComponent(String(selectedEventId))}/assignments`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload: unknown = await res.json();
         const list = Array.isArray((payload as any)) ? (payload as any) : (((payload as any)?.data ?? []) as unknown[]);
@@ -239,7 +240,7 @@ const UserPointages = () => {
 
   const refreshAttendances = useCallback(async () => {
     if (!selectedEventId) return;
-    const res = await fetchWithAuth(`/api/utilisateur/events/${encodeURIComponent(String(selectedEventId))}/attendances`);
+    const res = await fetchWithAuth(`${API_BASE_URL}/api/utilisateur/events/${encodeURIComponent(String(selectedEventId))}/attendances`);
     if (!res.ok) return;
     const rows: Array<{ staffId: number; arrivedAt?: string | null; departedAt?: string | null }> = await res.json();
     const map: AttendanceState = {};
@@ -273,7 +274,7 @@ const UserPointages = () => {
     try {
       setLoading(true);
       const staffId = Number(selectedUser.id);
-      const res = await fetchWithAuth(`/api/utilisateur/staff/${encodeURIComponent(String(selectedUser.id))}/signature`, {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/utilisateur/staff/${encodeURIComponent(String(selectedUser.id))}/signature`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
