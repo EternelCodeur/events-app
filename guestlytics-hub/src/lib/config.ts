@@ -1,3 +1,8 @@
+// URL de base de l'API - en production, utilise l'URL absolue du backend
+// En développement, le proxy Vite gère les requêtes /api/*
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.PROD ? "https://api.okoume-events.ga" : "");
+
 // Utilitaire simple pour parser une valeur entière positive avec un fallback
 function parsePositiveInt(raw: string | number | undefined | null, fallback: number): number {
   const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10);

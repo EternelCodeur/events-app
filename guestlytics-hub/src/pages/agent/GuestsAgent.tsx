@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { getXsrfTokenFromCookie } from "@/lib/auth";
+import { API_BASE_URL } from "@/lib/config";
 
 const GuestsAgent = () => {
   const [searchTerm, setSearchTerm] = useState(""); // terme appliqué à la recherche
@@ -67,7 +68,7 @@ const GuestsAgent = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetchWithAuth(`/api/agent/events`);
+        const res = await fetchWithAuth(`${API_BASE_URL}/api/agent/events`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload = await res.json();
         const list = Array.isArray(payload) ? payload : (payload.data ?? []);
@@ -92,7 +93,7 @@ const GuestsAgent = () => {
       if (!selectedEventId) { setAllGuests([]); return; }
       try {
         setLoading(true);
-        const res = await fetchWithAuth(`/api/agent/events/${encodeURIComponent(selectedEventId)}/invites`);
+        const res = await fetchWithAuth(`${API_BASE_URL}/api/agent/events/${encodeURIComponent(selectedEventId)}/invites`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload = await res.json();
         const list = Array.isArray(payload) ? payload : (payload.data ?? []);
@@ -176,7 +177,7 @@ const GuestsAgent = () => {
     if (!selectedGuest) return;
     try {
       setLoading(true);
-      const res = await fetchWithAuth(`/api/agent/invites/${encodeURIComponent(String(selectedGuest.id))}/checkin`, { method: 'POST' });
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/agent/invites/${encodeURIComponent(String(selectedGuest.id))}/checkin`, { method: 'POST' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw { response: { data: err }, message: `HTTP ${res.status}` };

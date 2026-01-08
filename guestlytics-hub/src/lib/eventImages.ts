@@ -1,4 +1,5 @@
 import { getToken, refresh } from "./auth";
+import { API_BASE_URL } from "./config";
 
 export type EventImageItem = {
   id: string;
@@ -39,11 +40,11 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function getEventImages(eventId: string): Promise<EventImageItem[]> {
-  return request<EventImageItem[]>(`/api/events/${encodeURIComponent(eventId)}/images`, { method: "GET" });
+  return request<EventImageItem[]>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/images`, { method: "GET" });
 }
 
 export async function getImageBlobUrl(imageId: string): Promise<string> {
-  const url = `/api/event-images/${encodeURIComponent(imageId)}/file`;
+  const url = `${API_BASE_URL}/api/event-images/${encodeURIComponent(imageId)}/file`;
   const headers = await authHeaders();
   let res = await fetch(url, { credentials: "include", headers });
   if (res.status === 401) {
@@ -74,7 +75,7 @@ export async function uploadEventImages(
     const token = getToken();
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", `/api/events/${encodeURIComponent(eventId)}/images`);
+      xhr.open("POST", `${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/images`);
       if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       xhr.withCredentials = true;
       xhr.upload.onprogress = (e) => {
@@ -117,5 +118,5 @@ export async function uploadEventImages(
 }
 
 export async function deleteEventImage(imageId: string): Promise<void> {
-  await request<void>(`/api/event-images/${encodeURIComponent(imageId)}`, { method: "DELETE" });
+  await request<void>(`${API_BASE_URL}/api/event-images/${encodeURIComponent(imageId)}`, { method: "DELETE" });
 }

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { useUser } from "@/context/UserContext";
+import { API_BASE_URL } from "@/lib/config";
 
 const Profile = () => {
   const { role, user } = useUser();
@@ -55,7 +56,7 @@ const Profile = () => {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/auth/password", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/password`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

@@ -6,32 +6,17 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const apiUrl = env.VITE_API_URL || (mode === "development" ? "http://127.0.0.1:8000" : "https://api.okoume-events.ga");
   return {
-    base: mode === "production" ? "./" : "/",
+    base: "/",
     server: {
       host: "::",
       port: 8080,
       proxy: {
         "/api": {
-          target: "https://api.okoume-events.ga",
-          //target: "http://127.0.0.1:8000",
+          target: apiUrl,
           changeOrigin: true,
           secure: false,
-          configure: (proxy) => {
-            proxy.on("proxyRes", (proxyRes: { headers: Record<string, string | string[] | undefined> }) => {
-              const setCookie = proxyRes.headers["set-cookie"] as string[] | undefined;
-              if (setCookie && Array.isArray(setCookie)) {
-                proxyRes.headers["set-cookie"] = setCookie.map((cookie) => {
-                  let c = cookie.replace(/;\s*Domain=[^;]*/i, "");
-                  if (/;\s*SameSite=None/i.test(c)) {
-                    c = c.replace(/;\s*SameSite=None/gi, "; SameSite=Lax");
-                  }
-                  c = c.replace(/;\s*Secure/gi, "");
-                  return c;
-                });
-              }
-            });
-          },
         },
       },
     },

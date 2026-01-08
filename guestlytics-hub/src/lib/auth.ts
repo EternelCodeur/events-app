@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Requests use relative '/api' so Vite proxy routes to backend in dev
+import { API_BASE_URL } from "./config";
 
 export type AuthUser = {
   id: string;
@@ -31,7 +32,7 @@ export async function login(
   password: string,
   remember: boolean,
 ): Promise<AuthUser> {
-  const res = await fetch("/api/auth/login", {
+  const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -59,7 +60,7 @@ export async function login(
 
 export async function logout(): Promise<void> {
   try {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    await fetch(`${API_BASE_URL}/api/auth/logout`, { method: "POST", credentials: "include" });
   } catch { /* noop */ }
   currentUser = null;
   currentToken = null;
@@ -72,7 +73,7 @@ export async function logout(): Promise<void> {
 export async function getMe(): Promise<AuthUser | null> {
   if (currentUser) return currentUser;
   try {
-    const res = await fetch("/api/auth/me", { credentials: "include" });
+    const res = await fetch(`${API_BASE_URL}/api/auth/me`, { credentials: "include" });
     if (!res.ok) return null;
     const u = (await res.json()) as Record<string, unknown>;
     const user: AuthUser = {
@@ -92,7 +93,7 @@ export async function getMe(): Promise<AuthUser | null> {
 
 export async function refresh(): Promise<boolean> {
   try {
-    const res = await fetch("/api/auth/refresh", { method: "POST", credentials: "include" });
+    const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, { method: "POST", credentials: "include" });
     if (!res.ok) {
       currentUser = null;
       currentToken = null;
