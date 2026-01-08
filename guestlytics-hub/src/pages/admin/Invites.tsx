@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { getXsrfTokenFromCookie } from '@/lib/auth';
-import { API_BASE_URL } from '@/lib/config';
 import { getEvent } from '@/lib/events';
 
 interface Invite {
@@ -163,7 +162,7 @@ const Invites = () => {
   const fetchInvites = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetchWithAuth(`${API_BASE_URL}/api/events/${encodeURIComponent(id || '')}/invites`);
+      const res = await fetchWithAuth(`/api/events/${encodeURIComponent(id || '')}/invites`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
       const list = Array.isArray(payload) ? payload : (payload.data ?? []);
@@ -180,7 +179,7 @@ const Invites = () => {
 
   const fetchTables = useCallback(async () => {
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/api/events/${encodeURIComponent(id || '')}/tables/summary`);
+      const res = await fetchWithAuth(`/api/events/${encodeURIComponent(id || '')}/tables/summary`);
       if (!res.ok) return;
       const payload = await res.json();
       const list = Array.isArray(payload) ? payload : (payload.data ?? []);
@@ -258,7 +257,7 @@ const Invites = () => {
       };
       const auth = await getAuthHeader();
       const xsrf = getXsrfTokenFromCookie();
-      const res = await fetch(`${API_BASE_URL}/api/events/${encodeURIComponent(id || '')}/invites`, {
+      const res = await fetch(`/api/events/${encodeURIComponent(id || '')}/invites`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', ...(auth as HeadersInit), ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) },
@@ -309,7 +308,7 @@ const Invites = () => {
       };
       const auth = await getAuthHeader();
       const xsrf = getXsrfTokenFromCookie();
-      const res = await fetch(`${API_BASE_URL}/api/invites/${editingId}`, {
+      const res = await fetch(`/api/invites/${editingId}`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', ...(auth as HeadersInit), ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) },
@@ -370,7 +369,7 @@ const Invites = () => {
       try {
         const auth = await getAuthHeader();
         const xsrf = getXsrfTokenFromCookie();
-        const res = await fetch(`${API_BASE_URL}/api/invites/${id}`, { method: 'DELETE', credentials: 'include', headers: { ...(auth as HeadersInit), ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) } });
+        const res = await fetch(`/api/invites/${id}`, { method: 'DELETE', credentials: 'include', headers: { ...(auth as HeadersInit), ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) } });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw { response: { data: err } };

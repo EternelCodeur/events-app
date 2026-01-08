@@ -1,5 +1,3 @@
-import { API_BASE_URL } from "./config";
-
 export type AppRole = "hotesse" | "utilisateur";
 
 export type AppUser = {
@@ -60,20 +58,20 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function listUsers(): Promise<AppUser[]> {
-  return request<AppUser[]>(`${API_BASE_URL}/api/users`, { method: "GET" });
+  return request<AppUser[]>(`/api/users`, { method: "GET" });
 }
 
 export async function createUser(payload: CreateUserPayload): Promise<AppUser> {
-  return request<AppUser>(`${API_BASE_URL}/api/users`, { method: "POST", body: JSON.stringify(payload) });
+  return request<AppUser>(`/api/users`, { method: "POST", body: JSON.stringify(payload) });
 }
 
 export async function updateUser(id: string, payload: UpdateUserPayload): Promise<AppUser> {
-  return request<AppUser>(`${API_BASE_URL}/api/users/${encodeURIComponent(id)}`, {
+  return request<AppUser>(`/api/users/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  await request<void>(`${API_BASE_URL}/api/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+  await request<void>(`/api/users/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

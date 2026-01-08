@@ -56,7 +56,7 @@ class VenueImageController extends Controller
         if (!$base) {
             $entreprise = Entreprise::findOrFail($venue->entreprise_id);
             $base = 'entreprises/' . (string) $entreprise->slug . '/venues/' . Str::slug((string) $venue->name, '-');
-            Storage::disk('local')->makeDirectory($base);
+            Storage::disk('public')->makeDirectory($base);
             $venue->folder_path = $base;
             $venue->save();
         }
@@ -67,7 +67,7 @@ class VenueImageController extends Controller
             $ext = strtolower((string) $file->getClientOriginalExtension());
             $name = (string) Str::uuid() . ($ext ? ('.' . $ext) : '');
             $path = $base . '/' . $name;
-            Storage::disk('local')->putFileAs($base, $file, $name);
+            Storage::disk('public')->putFileAs($base, $file, $name);
             $img = VenueImage::create([
                 'venue_id' => $venue->id,
                 'file_path' => $path,
@@ -99,7 +99,7 @@ class VenueImageController extends Controller
             }
         }
         if (!empty($image->file_path)) {
-            Storage::disk('local')->delete($image->file_path);
+            Storage::disk('public')->delete($image->file_path);
         }
         $image->delete();
         return response()->noContent();
@@ -112,7 +112,7 @@ class VenueImageController extends Controller
         if (($user->role ?? 'admin') !== 'superadmin' && (int)$venue->entreprise_id !== (int)$user->entreprise_id) {
             abort(403, 'Forbidden');
         }
-        $full = Storage::disk('local')->path($image->file_path);
+        $full = Storage::disk('public')->path($image->file_path);
         if (!is_string($full) || !file_exists($full)) {
             abort(404, 'Fichier introuvable');
         }

@@ -1,7 +1,5 @@
 export type TableStatus = "en_attente" | "pleine";
 
-import { API_BASE_URL } from "./config";
-
 export type TableItem = {
   id: string;
   eventId: string;
@@ -76,23 +74,23 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function getTables(eventId: string): Promise<TableItem[]> {
-  return request<TableItem[]>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tables`, { method: "GET" });
+  return request<TableItem[]>(`/api/events/${encodeURIComponent(eventId)}/tables`, { method: "GET" });
 }
 
 export async function createTable(eventId: string, payload: CreateTablePayload): Promise<TableItem> {
-  return request<TableItem>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tables`, {
+  return request<TableItem>(`/api/events/${encodeURIComponent(eventId)}/tables`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function updateTable(tableId: string, payload: UpdateTablePayload): Promise<TableItem> {
-  return request<TableItem>(`${API_BASE_URL}/api/tables/${encodeURIComponent(tableId)}`, {
+  return request<TableItem>(`/api/tables/${encodeURIComponent(tableId)}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
 
 export async function deleteTable(tableId: string): Promise<void> {
-  await request<void>(`${API_BASE_URL}/api/tables/${encodeURIComponent(tableId)}`, { method: "DELETE" });
+  await request<void>(`/api/tables/${encodeURIComponent(tableId)}`, { method: "DELETE" });
 }

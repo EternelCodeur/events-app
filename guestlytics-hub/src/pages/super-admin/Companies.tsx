@@ -14,7 +14,6 @@ import {
 import { getCompanies, createCompany, type Company } from "@/lib/api";
 import { updateCompanyStatus, deleteCompany, updateCompany } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
-import { API_BASE_URL } from "@/lib/config";
 
 const slugify = (s: string) =>
   s
@@ -119,7 +118,7 @@ const Companies = () => {
       // SSE désactivé en mode déconnecté (mock)
       return;
     }
-    const es = new EventSource(`${API_BASE_URL}/api/companies/stream`, { withCredentials: true } as EventSourceInit);
+    const es = new EventSource(`/api/companies/stream`, { withCredentials: true } as EventSourceInit);
 
     const handleCreated = (ev: MessageEvent) => {
       try {

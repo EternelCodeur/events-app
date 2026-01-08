@@ -1,5 +1,3 @@
-import { API_BASE_URL } from "./config";
-
 export type EventTask = {
   id: string;
   eventId: string;
@@ -65,25 +63,25 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function getTasks(eventId: string): Promise<EventTask[]> {
-  return request<EventTask[]>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tasks`, { method: "GET" });
+  return request<EventTask[]>(`/api/events/${encodeURIComponent(eventId)}/tasks`, { method: "GET" });
 }
 
 export async function createTask(eventId: string, payload: CreateTaskPayload): Promise<EventTask> {
-  return request<EventTask>(`${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/tasks`, {
+  return request<EventTask>(`/api/events/${encodeURIComponent(eventId)}/tasks`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function updateTask(id: string, payload: UpdateTaskPayload): Promise<EventTask> {
-  return request<EventTask>(`${API_BASE_URL}/api/tasks/${encodeURIComponent(id)}`, {
+  return request<EventTask>(`/api/tasks/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  await request<void>(`${API_BASE_URL}/api/tasks/${encodeURIComponent(id)}`, {
+  await request<void>(`/api/tasks/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
 }

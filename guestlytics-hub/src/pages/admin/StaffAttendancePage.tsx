@@ -6,7 +6,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Eye } from "lucide-react";
 import { getXsrfTokenFromCookie } from "@/lib/auth";
-import { API_BASE_URL } from "@/lib/config";
 
 // Types simples pour les données de présence
 interface AttendanceDay {
@@ -126,7 +125,7 @@ const StaffAttendancePage: React.FC = () => {
     (async () => {
       try {
         if (!id) return;
-        const res = await fetchWithAuth(`${API_BASE_URL}/api/staff/${encodeURIComponent(String(id))}`);
+        const res = await fetchWithAuth(`/api/staff/${encodeURIComponent(String(id))}`);
         if (!res.ok) return;
         const data = await res.json();
         const name = String((data?.data?.name ?? data?.name ?? '') as string);
@@ -139,7 +138,7 @@ const StaffAttendancePage: React.FC = () => {
 
   const loadRows = useCallback(async () => {
     if (!id) return;
-    const url = `${API_BASE_URL}/api/utilisateur/staff/${encodeURIComponent(String(id))}/attendances?month=${encodeURIComponent(String(period))}`;
+    const url = `/api/utilisateur/staff/${encodeURIComponent(String(id))}/attendances?month=${encodeURIComponent(String(period))}`;
     const res = await fetchWithAuth(url);
     if (!res.ok) { setRows([]); return; }
     const data = await res.json();

@@ -22,9 +22,7 @@ export type CompanyUpdatePayload = {
   status?: "active" | "inactive";
 };
 
-import { API_BASE_URL } from "./config";
-
-const API_BASE = `${API_BASE_URL}/api/entreprises`;
+const API_BASE = "/api/entreprises";
 
 // Lazy import to avoid circular deps between auth and api
 async function getAuthHeader(): Promise<HeadersInit> {

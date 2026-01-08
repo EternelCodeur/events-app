@@ -4,7 +4,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { API_BASE_URL } from "@/lib/config";
 
 type AgentEvent = { id: string; title: string; date?: string | null };
 type AgentInvite = {
@@ -54,7 +53,7 @@ const Checkins = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetchWithAuth(`${API_BASE_URL}/api/agent/events`);
+        const res = await fetchWithAuth(`/api/agent/events`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload: unknown = await res.json();
         const list = Array.isArray((payload as any)) ? (payload as any) : (((payload as any)?.data ?? []) as unknown[]);
@@ -76,7 +75,7 @@ const Checkins = () => {
       if (!selectedEventId) { setInvites([]); return; }
       try {
         setLoading(true);
-        const res = await fetchWithAuth(`${API_BASE_URL}/api/agent/events/${encodeURIComponent(selectedEventId)}/invites`);
+        const res = await fetchWithAuth(`/api/agent/events/${encodeURIComponent(selectedEventId)}/invites`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const payload: unknown = await res.json();
         const list = Array.isArray((payload as any)) ? (payload as any) : (((payload as any)?.data ?? []) as unknown[]);
@@ -106,7 +105,7 @@ const Checkins = () => {
   const markPresent = async (inviteId: number) => {
     try {
       setCheckingIds((m) => ({ ...m, [inviteId]: true }));
-      const res = await fetchWithAuth(`${API_BASE_URL}/api/agent/invites/${inviteId}/checkin`, { method: "POST" });
+      const res = await fetchWithAuth(`/api/agent/invites/${inviteId}/checkin`, { method: "POST" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.message || `HTTP ${res.status}`);
