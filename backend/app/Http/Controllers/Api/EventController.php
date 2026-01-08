@@ -192,7 +192,7 @@ class EventController extends Controller
         $entreprise = Entreprise::findOrFail($entrepriseId);
         $slug = (string) $entreprise->slug;
         $eventSlug = Str::slug((string) $event->title, '-');
-        Storage::disk('local')->makeDirectory('entreprises/' . $slug . '/events/' . $eventSlug);
+        Storage::disk('public')->makeDirectory('entreprises/' . $slug . '/events/' . $eventSlug);
 
         // Persist folder path on the event
         $event->folder_path = 'entreprises/' . $slug . '/events/' . $eventSlug;
@@ -388,14 +388,14 @@ class EventController extends Controller
             $oldSlugPath = $base . Str::slug((string) $oldTitle, '-');
             $oldRawPath = $base . $oldTitle;
             $newPath = $base . Str::slug((string) $event->title, '-');
-            if (Storage::disk('local')->exists($oldSlugPath)) {
-                Storage::disk('local')->move($oldSlugPath, $newPath);
-            } elseif (Storage::disk('local')->exists($oldRawPath)) {
-                Storage::disk('local')->move($oldRawPath, $newPath);
-            } elseif (Storage::disk('local')->exists($base . $event->id)) {
-                Storage::disk('local')->move($base . $event->id, $newPath);
+            if (Storage::disk('public')->exists($oldSlugPath)) {
+                Storage::disk('public')->move($oldSlugPath, $newPath);
+            } elseif (Storage::disk('public')->exists($oldRawPath)) {
+                Storage::disk('public')->move($oldRawPath, $newPath);
+            } elseif (Storage::disk('public')->exists($base . $event->id)) {
+                Storage::disk('public')->move($base . $event->id, $newPath);
             } else {
-                Storage::disk('local')->makeDirectory($newPath);
+                Storage::disk('public')->makeDirectory($newPath);
             }
             // Update folder path on the event
             $event->folder_path = $newPath;
@@ -530,11 +530,11 @@ class EventController extends Controller
         $base = 'entreprises/' . $slug . '/events/';
         $slugPath = $base . Str::slug((string) $event->title, '-');
         if (!empty($event->folder_path)) {
-            Storage::disk('local')->deleteDirectory($event->folder_path);
+            Storage::disk('public')->deleteDirectory($event->folder_path);
         }
-        Storage::disk('local')->deleteDirectory($slugPath);
-        Storage::disk('local')->deleteDirectory($base . $event->title);
-        Storage::disk('local')->deleteDirectory($base . $event->id);
+        Storage::disk('public')->deleteDirectory($slugPath);
+        Storage::disk('public')->deleteDirectory($base . $event->title);
+        Storage::disk('public')->deleteDirectory($base . $event->id);
 
         $staffIds = DB::table('event_staff_assignments')->where('event_id', $event->id)->pluck('staff_id');
 

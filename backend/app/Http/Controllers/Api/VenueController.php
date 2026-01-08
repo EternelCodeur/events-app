@@ -106,8 +106,8 @@ class VenueController extends Controller
         $base = 'entreprises/' . $entrepriseSlug . '/venues/';
         $venueSlug = Str::slug((string) $data['name'], '-');
         $newPath = $base . $venueSlug;
-        if (!Storage::disk('local')->exists($newPath)) {
-            Storage::disk('local')->makeDirectory($newPath);
+        if (!Storage::disk('public')->exists($newPath)) {
+            Storage::disk('public')->makeDirectory($newPath);
         }
         $venue->folder_path = $newPath;
         $venue->save();
@@ -164,14 +164,14 @@ class VenueController extends Controller
             $oldSlugPath = $base . Str::slug((string) $oldName, '-');
             $oldRawPath = $base . $oldName;
             $newPath = $base . Str::slug((string) $venue->name, '-');
-            if (Storage::disk('local')->exists($oldSlugPath)) {
-                Storage::disk('local')->move($oldSlugPath, $newPath);
-            } elseif (Storage::disk('local')->exists($oldRawPath)) {
-                Storage::disk('local')->move($oldRawPath, $newPath);
-            } elseif ($venue->folder_path && Storage::disk('local')->exists($venue->folder_path)) {
-                Storage::disk('local')->move($venue->folder_path, $newPath);
+            if (Storage::disk('public')->exists($oldSlugPath)) {
+                Storage::disk('public')->move($oldSlugPath, $newPath);
+            } elseif (Storage::disk('public')->exists($oldRawPath)) {
+                Storage::disk('public')->move($oldRawPath, $newPath);
+            } elseif ($venue->folder_path && Storage::disk('public')->exists($venue->folder_path)) {
+                Storage::disk('public')->move($venue->folder_path, $newPath);
             } else {
-                Storage::disk('local')->makeDirectory($newPath);
+                Storage::disk('public')->makeDirectory($newPath);
             }
             $venue->folder_path = $newPath;
             $venue->save();
@@ -201,8 +201,8 @@ class VenueController extends Controller
             }
         }
         foreach ($paths as $p) {
-            if (Storage::disk('local')->exists($p)) {
-                Storage::disk('local')->deleteDirectory($p);
+            if (Storage::disk('public')->exists($p)) {
+                Storage::disk('public')->deleteDirectory($p);
             }
         }
 

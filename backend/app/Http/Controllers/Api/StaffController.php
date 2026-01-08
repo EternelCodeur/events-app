@@ -144,7 +144,7 @@ class StaffController extends Controller
         $slug = (string) $entreprise->slug;
         $folderName = Str::slug((string) $staff->name, '-');
         $folder = 'entreprises/' . $slug . '/staff/' . $folderName;
-        Storage::disk('local')->makeDirectory($folder);
+        Storage::disk('public')->makeDirectory($folder);
 
         return new StaffResource($staff);
     }
@@ -202,7 +202,7 @@ class StaffController extends Controller
                 // Legacy path by id (from older versions)
                 $legacyIdPath = $base . $staff->id;
 
-                $disk = Storage::disk('local');
+                $disk = Storage::disk('public');
                 if ($disk->exists($oldPath)) {
                     if (!$disk->exists($newPath)) {
                         $disk->move($oldPath, $newPath);
@@ -247,8 +247,8 @@ class StaffController extends Controller
             $folderSlugName = Str::slug((string) $staff->name, '-');
             $basePathSlug = 'entreprises/' . $slug . '/staff/' . $folderSlugName;
             $basePathId = 'entreprises/' . $slug . '/staff/' . $staff->id;
-            Storage::disk('local')->deleteDirectory($basePathSlug);
-            Storage::disk('local')->deleteDirectory($basePathId);
+            Storage::disk('public')->deleteDirectory($basePathSlug);
+            Storage::disk('public')->deleteDirectory($basePathId);
         } catch (\Throwable $_) {
             // ignore folder deletion errors
         }
@@ -285,10 +285,10 @@ class StaffController extends Controller
         $slug = (string) $entreprise->slug;
         $folderName = Str::slug((string) $staff->name, '-');
         $base = 'entreprises/' . $slug . '/staff/' . $folderName . '/signatures';
-        Storage::disk('local')->makeDirectory($base);
+        Storage::disk('public')->makeDirectory($base);
         $prefix = $data['type'] === 'arrival' ? 'arrivee' : 'depart';
         $filename = $prefix . '_' . date('Ymd_His') . '.' . $ext;
-        Storage::disk('local')->put($base . '/' . $filename, $binary);
+        Storage::disk('public')->put($base . '/' . $filename, $binary);
 
         // Persist attendance per event
         $event = Event::findOrFail((int) $data['eventId']);
@@ -406,7 +406,7 @@ class StaffController extends Controller
         $slug = (string) $entreprise->slug;
         $folderSlug = 'entreprises/' . $slug . '/staff/' . Str::slug((string) $staff->name, '-') . '/signatures/' . $filename;
         $folderId = 'entreprises/' . $slug . '/staff/' . $staff->id . '/signatures/' . $filename;
-        $disk = Storage::disk('local');
+        $disk = Storage::disk('public');
         $path = null;
         if ($disk->exists($folderSlug)) {
             $path = $folderSlug;

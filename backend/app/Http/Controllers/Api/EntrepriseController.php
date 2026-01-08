@@ -62,7 +62,7 @@ class EntrepriseController extends Controller
             $entreprise->save();
         }
 
-        Storage::disk('local')->makeDirectory('entreprises/' . $slug);
+        Storage::disk('public')->makeDirectory('entreprises/' . $slug);
 
         return new EntrepriseResource($entreprise->fresh(['adminUser']));
     }
